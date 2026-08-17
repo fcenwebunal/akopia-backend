@@ -152,3 +152,13 @@ Tres cosas aprendidas, todas documentadas en el README §6b:
 - **Los hooks son de petición: `app.save()` dentro de una ruta NO los dispara.** Por eso el efecto en inventario se extrajo a `reserveInventory`, `closeReservation` y `applyReservationEffect` en `utils/helpers.js`, que invocan los dos caminos. Es el riesgo más serio al agregar rutas.
 - **Los parámetros de ruta van entre llaves** (`{id}`) desde la 0.23, no `:id` como en Echo.
 - **`BadRequestError` no sirve para devolver datos:** su segundo argumento se interpreta como errores de validación por campo. Para responder con estructura propia hay que usar `e.json(400, ...)`, lo que obliga a validar antes de abrir la transacción.
+
+### 2026-08-17 (noche) — Advertencias resueltas y verificación continua
+
+Las cinco advertencias de la auditoría quedaron cerradas. Nuevo script `scripts/verificar-auditoria.ps1`: 16 comprobaciones, una por hallazgo, contra la API en ejecución. **Correrlo en todo PR que toque los hooks.**
+
+- **A1** resuelta por el arreglo de C1: ninguna cubeta puede quedar negativa.
+- **A2** — filtros con parámetros en `findInventory`. **Ojo:** un parámetro vacío **no equivale** al literal `''` en un campo de relación; con `{:locationId}` vacío dejaron de encontrarse las filas sin ubicar y se rompió el traslado a cuarentena. El caso sin ubicación conserva el literal.
+- **A3** — migración `028` con la colección `sequences`. El número se reserva dentro de la transacción que inserta el registro, así que SQLite serializa. El hook de códigos ahora abre transacción, que antes no lo hacía. Comprobado con 12 donaciones en paralelo: 12 códigos únicos, cero errores.
+- **A4** — `hasChanged` en la auditoría: compara por identidad y solo serializa cuando ambos lados son objetos.
+- **A5** — se mantiene como diseño. Atribuir un movimiento a un usuario genérico vaciaría de sentido la trazabilidad. Solo cambió el mensaje, que ahora dice qué hacer.

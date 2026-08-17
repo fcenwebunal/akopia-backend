@@ -10,11 +10,13 @@
 
 ## Resumen ejecutivo
 
-| | Cantidad |
-|---|---|
-| ✅ Correcto | 41 |
-| ❌ Crítico | 6 |
-| ⚠️ Frágil | 5 |
+| | Encontrados | Estado |
+|---|---|---|
+| ✅ Correcto | 41 | — |
+| ❌ Crítico | 6 | 5 corregidos, 1 cerrado por diseño (C6) |
+| ⚠️ Frágil | 5 | 4 corregidos, 1 confirmado como diseño (A5) |
+
+**Verificación continua:** `.\scripts\verificar-auditoria.ps1` prueba un caso por hallazgo contra la API en ejecución. 16 comprobaciones, todas en verde. Correrlo antes de cada PR que toque los hooks evita que cualquiera de estos vuelva.
 
 **La aritmética del inventario es correcta.** Los diez tipos de movimiento están implementados y coinciden exactamente con el mapa, y `total_qty` se recalcula como suma al final, no de forma incremental.
 
@@ -115,25 +117,39 @@ El mapa de movimientos lo define como «Devolución recibida»: lo que vuelve de
 
 ## 3. Advertencias
 
-### ⚠️ A1 — `salida` no comprueba que haya reserva suficiente
+Las cinco quedaron resueltas. Se conserva el diagnóstico original por si vuelve a aparecer el mismo patrón.
 
-**`helpers.js:129-131`.** `reserved -= quantity` sin validar. Combinado con C1, una salida mayor que lo reservado deja la reserva en 0 en silencio. Debe validarse antes.
+### ✅ A1 — `salida` no comprobaba que hubiera reserva suficiente
 
-### ⚠️ A2 — Filtros construidos por concatenación
+**`helpers.js:129-131`.** `reserved -= quantity` sin validar. Combinado con C1, una salida mayor que lo reservado dejaba la reserva en 0 en silencio.
 
-**`helpers.js:66-72`.** `"product_id = '" + productId + "'"`. Los ids de PocketBase son alfanuméricos, así que hoy no es explotable, pero el SDK admite filtros con parámetros y esta forma es frágil ante cualquier valor que venga de fuera.
+**Resuelto por el arreglo de C1:** ninguna cubeta puede quedar negativa, así que la operación se rechaza y se revierte.
 
-### ⚠️ A3 — Carrera en `generateSequenceCode`
+### ✅ A2 — Filtros construidos por concatenación
 
-**`helpers.js:26-46`.** Lee el último código y suma uno, sin bloqueo. Dos donaciones simultáneas piden el mismo número; el índice único hace que la segunda falle con 400 en vez de duplicar. Tolerable con un operador a la vez.
+**`helpers.js:66-72`.** `"product_id = '" + productId + "'"`. Los ids de PocketBase son alfanuméricos, así que no era explotable, pero cualquier valor con comilla habría convertido la consulta en otra distinta sin avisar.
 
-### ⚠️ A4 — La auditoría compara con `String()`
+**Resuelto:** `findInventory` usa filtros con parámetros (`{:productId}`). El caso sin ubicación conserva el literal `''` porque un parámetro vacío **no equivale** al literal en un campo de relación — no encuentra las filas sin ubicar. Se descubrió rompiendo el traslado a cuarentena al aplicar el cambio.
 
-**`04_audit.pb.js:73`.** `String(oldValue) !== String(newValue)` colapsa tipos: `0` y `"0"` se consideran iguales, y dos objetos distintos dan ambos `"[object Object]"`. Para los campos auditados hoy (texto, números, selects) funciona, pero no detectaría cambios en un campo JSON.
+### ✅ A3 — Carrera en `generateSequenceCode`
 
-### ⚠️ A5 — Sin operador no hay movimiento, y eso incluye al panel
+**`helpers.js:26-46`.** Leía el último código y sumaba uno, sin bloqueo. Dos donaciones simultáneas pedían el mismo número; el índice único hacía fallar la segunda con un 400 que el operador no podía entender.
 
-**`03_inventory.pb.js`, varias.** Es deliberado y está documentado, pero conviene recordarlo: clasificar un artículo desde el panel `/_/` con un superusuario devuelve 400, porque un superusuario no es un registro de `users`.
+**Resuelto:** migración `028` crea la colección `sequences`, un contador por serie. El número se reserva dentro de la misma transacción que inserta el registro, así que SQLite serializa el acceso.
+
+**Comprobado:** 12 donaciones lanzadas en paralelo devolvieron 12 códigos únicos y consecutivos, sin un solo error. Con el método anterior, 11 de esas 12 habrían fallado.
+
+### ✅ A4 — La auditoría comparaba con `String()`
+
+**`04_audit.pb.js:73`.** `String(oldValue) !== String(newValue)` colapsaba tipos: `0` y `"0"` pasaban por iguales, y dos objetos distintos daban ambos `"[object Object]"`.
+
+**Resuelto:** `hasChanged` compara por identidad y solo serializa cuando ambos lados son objetos —fechas, JSON, relaciones múltiples—, porque dos instancias equivalentes nunca son `===` entre sí.
+
+### ✅ A5 — Sin operador no hay movimiento, y eso incluye al panel
+
+**`03_inventory.pb.js`, varias.** Clasificar un artículo desde el panel `/_/` con un superusuario devuelve 400, porque un superusuario no es un registro de `users`.
+
+**Se mantiene como está: es la decisión de diseño, no un defecto.** Sin operador no hay a quién atribuir el movimiento, y atribuirlo a un usuario genérico vaciaría de sentido la trazabilidad. Lo que sí cambió es el mensaje, que ahora dice qué hacer: *«El panel de administración entra con un superusuario, que no es un operador: haga este cambio desde la aplicación»*.
 
 ---
 

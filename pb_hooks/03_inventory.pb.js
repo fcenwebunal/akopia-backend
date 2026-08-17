@@ -45,7 +45,9 @@ onRecordCreateRequest((e) => {
       const operatorId = getOperatorId(e);
       if (!operatorId) {
         throw new BadRequestError(
-          "Se requiere un operador autenticado para registrar movimientos de inventario"
+          "Se requiere un operador autenticado para registrar movimientos de inventario. " +
+            "El panel de administración entra con un superusuario, que no es un operador: " +
+            "haga este cambio desde la aplicación"
         );
       }
 
@@ -191,7 +193,9 @@ onRecordUpdateRequest((e) => {
       const operatorId = getOperatorId(e);
       if (!operatorId) {
         throw new BadRequestError(
-          "Se requiere un operador autenticado para registrar movimientos de inventario"
+          "Se requiere un operador autenticado para registrar movimientos de inventario. " +
+            "El panel de administración entra con un superusuario, que no es un operador: " +
+            "haga este cambio desde la aplicación"
         );
       }
 
@@ -265,7 +269,9 @@ onRecordCreateRequest((e) => {
       const operatorId = getOperatorId(e);
       if (!operatorId) {
         throw new BadRequestError(
-          "Se requiere un operador autenticado para registrar movimientos de inventario"
+          "Se requiere un operador autenticado para registrar movimientos de inventario. " +
+            "El panel de administración entra con un superusuario, que no es un operador: " +
+            "haga este cambio desde la aplicación"
         );
       }
 
@@ -346,7 +352,9 @@ onRecordUpdateRequest((e) => {
       const operatorId = getOperatorId(e);
       if (!operatorId) {
         throw new BadRequestError(
-          "Se requiere un operador autenticado para registrar movimientos de inventario"
+          "Se requiere un operador autenticado para registrar movimientos de inventario. " +
+            "El panel de administración entra con un superusuario, que no es un operador: " +
+            "haga este cambio desde la aplicación"
         );
       }
 
@@ -427,7 +435,9 @@ onRecordCreateRequest((e) => {
       const operatorId = getOperatorId(e);
       if (!operatorId) {
         throw new BadRequestError(
-          "Se requiere un operador autenticado para registrar movimientos de inventario"
+          "Se requiere un operador autenticado para registrar movimientos de inventario. " +
+            "El panel de administración entra con un superusuario, que no es un operador: " +
+            "haga este cambio desde la aplicación"
         );
       }
 

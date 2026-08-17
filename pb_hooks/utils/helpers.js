@@ -23,43 +23,51 @@ function getOperatorId(e) {
   return null;
 }
 
+// Reserva el siguiente número de la serie y lo devuelve formateado.
+//
+// El contador se lee y se incrementa dentro de la transacción que inserta
+// el registro, así que dos peticiones simultáneas no pueden llevarse el
+// mismo número: SQLite serializa las escrituras y la segunda ve el valor
+// ya actualizado. Leer el último código y sumar uno no daba esa garantía
+// y hacía fallar la segunda donación con un 400 inexplicable.
 function generateSequenceCode(app, prefix, collectionName) {
-  var records = app.findRecordsByFilter(collectionName, "", "-code", 1, 0);
+  var sequence = app.findFirstRecordByFilter(
+    "sequences",
+    "key = {:key}",
+    { key: collectionName }
+  );
 
-  if (records.length > 0) {
-    var lastCode = records[0].get("code");
-    var numericPart = lastCode.replace(prefix, "");
-    var parsed = parseInt(numericPart, 10);
-    if (isNaN(parsed)) {
-      console.warn(
-        "generateSequenceCode: could not parse numeric part '" +
-          numericPart +
-          "' from code '" +
-          lastCode +
-          "', defaulting to record count"
-      );
-      var allRecords = app.findRecordsByFilter(collectionName, "", "", 0, 0);
-      parsed = allRecords.length;
-    }
-    var nextNum = parsed + 1;
-    return prefix + String(nextNum).padStart(6, "0");
-  }
+  var next = sequence.get("next_value") || 1;
 
-  return prefix + "000001";
+  sequence.set("next_value", next + 1);
+  app.save(sequence);
+
+  return prefix + String(next).padStart(6, "0");
 }
 
 // findFirstRecordByFilter throws when there is no match, so every
 // lookup that may legitimately come back empty goes through here.
+//
+// El filtro va con parámetros, no concatenado: los ids de PocketBase son
+// alfanuméricos y hoy no romperían nada, pero un valor con comilla
+// convertiría la consulta en otra distinta sin avisar.
 function findInventory(app, productId, locationId) {
-  var filter =
-    "product_id = '" +
-    productId +
-    "' && location_id = '" +
-    (locationId || "") +
-    "'";
+  // El caso sin ubicación va con el literal '' y no con un parámetro
+  // vacío: en un campo de relación no equivalen, y el parámetro no
+  // encuentra las filas sin ubicar. El literal no lleva datos de fuera,
+  // así que la garantía de A2 se mantiene.
+  var filter = "product_id = {:productId} && location_id = ";
+  var params = { productId: productId };
+
+  if (locationId) {
+    filter += "{:locationId}";
+    params.locationId = locationId;
+  } else {
+    filter += "''";
+  }
 
   try {
-    return app.findFirstRecordByFilter("inventory", filter);
+    return app.findFirstRecordByFilter("inventory", filter, params);
   } catch (err) {
     return null;
   }

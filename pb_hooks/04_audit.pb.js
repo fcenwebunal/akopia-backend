@@ -65,11 +65,32 @@ onRecordUpdateRequest((e) => {
       return;
     }
 
+    // Comparar con String() colapsaba tipos: 0 y "0" pasaban por iguales,
+    // y dos objetos distintos daban ambos "[object Object]". Los objetos
+    // —fechas, JSON, relaciones múltiples— se comparan serializados
+    // porque dos instancias equivalentes nunca son === entre sí.
+    const hasChanged = (oldValue, newValue) => {
+      if (oldValue === newValue) {
+        return false;
+      }
+
+      if (
+        oldValue !== null &&
+        newValue !== null &&
+        typeof oldValue === "object" &&
+        typeof newValue === "object"
+      ) {
+        return JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      }
+
+      return true;
+    };
+
     const changes = [];
     for (const field of fields) {
       const oldValue = previous.get(field);
       const newValue = e.record.get(field);
-      if (String(oldValue) !== String(newValue)) {
+      if (hasChanged(oldValue, newValue)) {
         changes.push({ field: field, old_value: oldValue, new_value: newValue });
       }
     }

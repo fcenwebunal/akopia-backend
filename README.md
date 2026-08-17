@@ -443,11 +443,14 @@ Y después el script de verificación, que hace exactamente esta secuencia:
 Si los seis pasos pasan, el cambio está listo para PR. En vez de hacerlos a mano:
 
 ```powershell
-.\scripts\verificar.ps1     # Windows
+.\scripts\verificar.ps1              # el flujo completo
+.\scripts\verificar-auditoria.ps1    # los hallazgos de la auditoría
 ```
 ```bash
-./scripts/verificar.sh      # Git Bash / Linux / macOS
+./scripts/verificar.sh               # Git Bash / Linux / macOS
 ```
+
+El segundo prueba un caso por cada hallazgo de [`AUDITORIA-HOOKS.md`](AUDITORIA-HOOKS.md): que un saldo sin existencias suficientes se rechace en vez de recortarse, que un rechazado no entre a disponible sin movimiento, que una reserva cerrada no se reabra, que los códigos no colisionen. **Córrelo siempre que toques los hooks** — es lo que evita que estos errores vuelvan.
 
 ---
 
