@@ -161,13 +161,18 @@ Abre ese último enlace y crea **tu** superusuario, con tu propio correo. Es per
 
 ### Paso 6 — Verificar que quedó bien
 
+Hay un script que recorre el flujo completo y no depende de que teclees `curl` correctamente:
+
+```powershell
+.\scripts\verificar.ps1     # Windows
+```
 ```bash
-curl -X POST http://127.0.0.1:8090/api/collections/users/auth-with-password \
-  -H "Content-Type: application/json" \
-  -d '{"identity":"admin@akopia.org","password":"UnaClaveLargaSoloParaLocal"}'
+./scripts/verificar.sh      # Git Bash / Linux / macOS
 ```
 
-Debe devolver un `token` y un registro con `"role":"admin"`. Con ese token:
+Lee la contraseña de tu `.env` y hace once comprobaciones, cada una con `OK` o `FALLA`. Escribe datos de prueba, así que úsalo en desarrollo.
+
+A mano, la autenticación debe devolver un `token` y un registro con `"role":"admin"`. Con ese token:
 
 | Petición | Resultado esperado |
 |---|---|
@@ -181,15 +186,16 @@ Debe devolver un `token` y un registro con `"role":"admin"`. Con ese token:
 Esta es la prueba que separa un backend que funciona de un CRUD crudo. Crea una donación **sin** `code`:
 
 ```bash
-curl -X POST http://127.0.0.1:8090/api/collections/donations/records \
+curl -s -X POST http://127.0.0.1:8090/api/collections/donations/records \
   -H "Content-Type: application/json" \
   -H "Authorization: TU_TOKEN" \
-  -d '{"donor_type":"individual","donor_name":"Prueba",
-       "receipt_date":"2026-08-17 10:00:00.000Z","operator_id":"ID_DEL_USUARIO"}'
+  -d '{"donor_type":"individual","donor_name":"Prueba","receipt_date":"2026-08-17 10:00:00.000Z","operator_id":"ID_DEL_USUARIO"}'
 ```
 
 ✅ **Correcto:** la respuesta trae `"code":"DON-000001"`.
 ❌ **Los hooks no están cargando:** `400` con `{"code":{"code":"validation_required","message":"Cannot be blank."}}`.
+
+> **En PowerShell este comando no funciona:** `curl` ahí es un alias de `Invoke-WebRequest`, que no entiende `-X`, `-H` ni `-d`, y `\` no continúa líneas. Usa `.\scripts\verificar.ps1`, o la versión con `Invoke-RestMethod` de [PUESTA-EN-MARCHA.md](PUESTA-EN-MARCHA.md#la-prueba-manual-si-prefieres-hacerla-tú).
 
 ### Empezar de cero
 
@@ -217,6 +223,9 @@ akopia-backend/
 │   └── utils/
 │       ├── helpers.js      # funciones compartidas
 │       └── config.js       # tablas de configuración por colección
+├── scripts/                # Verificación de extremo a extremo
+│   ├── verificar.ps1       # Windows
+│   └── verificar.sh        # Git Bash / Linux / macOS
 ├── pb_data/                # SQLite, archivos subidos, logs → NUNCA va a git
 ├── .env                    # secretos → NUNCA va a git
 ├── .env.example            # plantilla → sí va a git
@@ -394,7 +403,7 @@ rm -rf pb_data
 ./pocketbase serve
 ```
 
-Y después la secuencia del paso 7, extendida:
+Y después el script de verificación, que hace exactamente esta secuencia:
 
 1. Crear una donación sin `code` → debe llegar `DON-000001`
 2. Crear un `donation_item` con `classification_status: "pending"` → `inventory` sigue vacío
@@ -403,7 +412,14 @@ Y después la secuencia del paso 7, extendida:
 5. Intentar cambiarle la cantidad → `400` con *«No se puede cambiar la cantidad de un artículo que ya afectó inventario»*
 6. `GET /api/collections/audit_log/records` → hay registros de `create` y `status_change`
 
-Si los seis pasos pasan, el cambio está listo para PR.
+Si los seis pasos pasan, el cambio está listo para PR. En vez de hacerlos a mano:
+
+```powershell
+.\scripts\verificar.ps1     # Windows
+```
+```bash
+./scripts/verificar.sh      # Git Bash / Linux / macOS
+```
 
 ### Idioma en el código
 

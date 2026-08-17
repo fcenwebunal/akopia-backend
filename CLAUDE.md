@@ -96,3 +96,10 @@ Pendientes y decisiones abiertas: [README §8](README.md#8-estado-actual-y-pendi
 - Agregada [`PUESTA-EN-MARCHA.md`](PUESTA-EN-MARCHA.md): guía conjunta de los dos repositorios, con el diagrama de conexión, la comprobación de seis pasos y el diagnóstico por síntoma. Existe una copia gemela en el frontend.
 - Verificado que CORS funciona sin configuración: PocketBase responde `Access-Control-Allow-Origin: *`, así que `localhost:3000` puede llamar a `127.0.0.1:8090` en desarrollo. En producción no hay CORS porque nginx sirve ambos bajo el mismo dominio.
 - Instrucción global recibida: hacer push de cada cambio en el momento, y no proteger `main`.
+
+### 2026-08-17 (tarde) — Scripts de verificación
+
+- **Bug en la documentación:** las guías traían solo comandos `curl` de bash. En PowerShell `curl` es un alias de `Invoke-WebRequest`, que no entiende `-X`, `-H` ni `-d`, y `\` no continúa líneas — la continuación es `` ` ``. El equipo trabaja en Windows, así que ninguna comprobación de la guía era ejecutable tal cual.
+- Agregados `scripts/verificar.ps1` y `scripts/verificar.sh`: once comprobaciones de extremo a extremo (servidor, login, catálogo, código correlativo, entrada de inventario, movimiento, cuarentena, validación que revierte, auditoría), con salida `OK`/`FALLA` y código de salida. Leen la contraseña de `.env`.
+- Documentación corregida: el script es ahora el camino principal, y los comandos manuales llevan las dos sintaxis. Agregados los dos errores de PowerShell a las tablas de diagnóstico.
+- **Nota:** el script escribe datos de prueba (una donación y un artículo). Es inofensivo en desarrollo, pero conviene saberlo antes de correrlo varias veces y ver saldos acumulados.
