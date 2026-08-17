@@ -103,3 +103,10 @@ Pendientes y decisiones abiertas: [README §8](README.md#8-estado-actual-y-pendi
 - Agregados `scripts/verificar.ps1` y `scripts/verificar.sh`: once comprobaciones de extremo a extremo (servidor, login, catálogo, código correlativo, entrada de inventario, movimiento, cuarentena, validación que revierte, auditoría), con salida `OK`/`FALLA` y código de salida. Leen la contraseña de `.env`.
 - Documentación corregida: el script es ahora el camino principal, y los comandos manuales llevan las dos sintaxis. Agregados los dos errores de PowerShell a las tablas de diagnóstico.
 - **Nota:** el script escribe datos de prueba (una donación y un artículo). Es inofensivo en desarrollo, pero conviene saberlo antes de correrlo varias veces y ver saldos acumulados.
+
+### 2026-08-17 (noche) — Servidor de la UNAL
+
+- OTIC (Carlos) asignó el servidor `172.23.177.12`, usuario `juan`. Es una IP privada: **solo responde dentro de la red de la Universidad**, así que sin VPN o sin estar en el campus no hay acceso.
+- Agregada [`DESPLIEGUE.md`](DESPLIEGUE.md) con el procedimiento completo: reconocimiento del servidor, endurecimiento del acceso, usuario de sistema `akopia`, los dos servicios de systemd, nginx con el panel `/_/` restringido, cortafuegos y respaldos.
+- **Las credenciales del servidor no van en el repositorio.** La contraseña inicial llegó por correo en texto plano y debe cambiarse en el primer ingreso.
+- Pendiente de OTIC: VPN para `judiazgom`, confirmar `sudo` para `juan`, subdominio `acopio.manizales.unal.edu.co` y certificado TLS (lo emite la Universidad, no se instala certbot).

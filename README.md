@@ -6,6 +6,8 @@ Repositorio hermano: [`fcenwebunal/akopia-frontend`](https://github.com/fcenwebu
 
 > 🚀 **¿Primera vez?** Empieza por **[PUESTA-EN-MARCHA.md](PUESTA-EN-MARCHA.md)**: levanta el backend y el frontend juntos, y comprueba que se están hablando. Unos 15 minutos.
 >
+> 🖥️ **¿Vas a desplegar?** Ve a **[DESPLIEGUE.md](DESPLIEGUE.md)**: el servidor de la UNAL, paso a paso.
+>
 > Este README es la referencia del backend: modelo de datos, hooks y cómo aportar código.
 
 ---
