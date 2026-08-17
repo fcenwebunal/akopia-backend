@@ -15,6 +15,8 @@ La guía completa de instalación, modelo de datos y flujo de trabajo está en [
 >
 > Un cambio que el resto del equipo no puede descubrir leyendo el repositorio es un cambio que va a romperle el trabajo a alguien.
 
+**Además:** cada mejora o corrección se commitea y se empuja en el momento, sin esperar a que lo pidan. `main` no tiene protección de rama: se puede empujar directo cuando el cambio lo amerite, y los PR se reservan para lo que conviene revisar.
+
 ---
 
 ## Qué es esto en una frase
@@ -91,3 +93,6 @@ Pendientes y decisiones abiertas: [README §8](README.md#8-estado-actual-y-pendi
 - Configuración por colección extraída a `utils/config.js`, porque un handler serializado tampoco recibe argumentos de una función registradora.
 - **Bug nuevo encontrado y corregido:** migración `025_fix_inventory_qty_not_required.js`. Los cuatro campos de cantidad de `inventory` eran `required: true`, y PocketBase trata `0` como vacío en un `NumberField`. Eso hacía imposible crear el primer registro de inventario — es decir, la primera entrada de cualquier producto fallaba. `min: 0` sigue impidiendo saldos negativos.
 - `.gitignore` corregido (`pocketbase.exe`, `.env`, `*.log`, `CHANGELOG.md`, `LICENSE.md`), agregado `.env.example` y reescrito el README como guía completa.
+- Agregada [`PUESTA-EN-MARCHA.md`](PUESTA-EN-MARCHA.md): guía conjunta de los dos repositorios, con el diagrama de conexión, la comprobación de seis pasos y el diagnóstico por síntoma. Existe una copia gemela en el frontend.
+- Verificado que CORS funciona sin configuración: PocketBase responde `Access-Control-Allow-Origin: *`, así que `localhost:3000` puede llamar a `127.0.0.1:8090` en desarrollo. En producción no hay CORS porque nginx sirve ambos bajo el mismo dominio.
+- Instrucción global recibida: hacer push de cada cambio en el momento, y no proteger `main`.

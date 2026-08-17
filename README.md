@@ -4,6 +4,10 @@ Backend del sistema de gestión del **Centro de Acopio de la Universidad Naciona
 
 Repositorio hermano: [`fcenwebunal/akopia-frontend`](https://github.com/fcenwebunal/akopia-frontend).
 
+> 🚀 **¿Primera vez?** Empieza por **[PUESTA-EN-MARCHA.md](PUESTA-EN-MARCHA.md)**: levanta el backend y el frontend juntos, y comprueba que se están hablando. Unos 15 minutos.
+>
+> Este README es la referencia del backend: modelo de datos, hooks y cómo aportar código.
+
 ---
 
 ## Índice
