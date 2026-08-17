@@ -116,3 +116,18 @@ Pendientes y decisiones abiertas: [README §8](README.md#8-estado-actual-y-pendi
 - **Cliente VPN: FortiClient.** Carlos acompaña la configuración una vez instalado; la versión del instalador se pide en el hilo del correo, porque el cliente debe ser compatible con el firmware del FortiGate.
 - **El servidor es Ubuntu y `juan` tiene `sudo`.** El despliegue de `DESPLIEGUE.md` aplica tal cual.
 - Sigue pendiente el subdominio y el certificado TLS, y confirmar si `172.23.177.12` es fija o asignada por DHCP.
+
+### 2026-08-17 (noche) — Reglas de acceso endurecidas
+
+Migración `026_harden_access_rules.js`. En PocketBase la API se genera sola, así que «configurar endpoints» es configurar reglas. Tres cambios, todos verificados llamando a la API con tres identidades distintas:
+
+- **Un usuario desactivado no puede nada.** `users.active` existía pero ninguna regla lo miraba: un token vigente seguía sirviendo después de dar de baja a alguien. El frontend lo comprobaba al iniciar sesión, que es cortesía de interfaz, no defensa. Ahora todas las reglas llevan `@request.auth.active = true`. **Consecuencia: al crear un usuario hay que marcar `active`**, o no ve ni el catálogo.
+- **`inventory_movements.createRule` pasó a `null`.** Cualquier autenticado podía insertar un movimiento fantasma sin que ningún saldo cambiara, y el libro dejaba de cuadrar con `inventory` — justo la garantía que sostiene el modelo. Los hooks escriben por la capa de modelo y no pasan por las reglas, así que siguen igual.
+- **`adjustments.viewRule` pasó a admin**, que era lo que ya decía su `listRule`. Quien tuviera un id podía leer el ajuste completo.
+
+Dos cosas aprendidas al probarlo:
+
+- **`delete` es palabra reservada** y el parser de las migraciones la rechaza como nombre de propiedad en un objeto literal. Costó un `panic` en el arranque.
+- **Una `listRule` que no se cumple filtra, no rechaza:** devuelve `200` con `totalItems: 0`, no `403`. Al probar reglas hay que contar registros, no mirar el código de estado — mi primera prueba daba «PERMITE» donde en realidad bloqueaba.
+
+También corregido en el frontend: `UserRole` declaraba `"admin" | "operador" | "consulta"` cuando el esquema solo admite `admin` y `operator`.

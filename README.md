@@ -278,6 +278,32 @@ En desarrollo **no hay base de datos compartida** y no hace falta: cada quien co
 | `adjustments` | La única vía para corregir un saldo a mano |
 | `audit_log` | Quién cambió qué y cuándo, en las 8 colecciones críticas |
 
+### Quién puede hacer qué
+
+PocketBase genera la API REST sola, así que **«configurar los endpoints» aquí es configurar las reglas de acceso**. Hay dos roles, `admin` y `operator`, y son los únicos valores que admite `users.role`.
+
+| Colección | Leer | Crear | Modificar | Borrar |
+|---|---|---|---|---|
+| `units`, `groups`, `categories`, `products`, `locations` | Cualquiera | admin | admin | Nadie |
+| `users` | admin (o uno mismo) | admin | admin | Nadie |
+| `donations`, `requests`, `dispatches`, `deliveries` | Cualquiera | Cualquiera | Su autor o admin | admin |
+| `donation_items`, `request_items` | Cualquiera | Cualquiera | Autor de la cabecera o admin | admin |
+| `reservations`, `preparations` | Cualquiera | Cualquiera | Su autor o admin | Nadie |
+| **`inventory`** | Cualquiera | **Nadie** | **Nadie** | **Nadie** |
+| **`inventory_movements`** | Cualquiera | **Nadie** | **Nadie** | **Nadie** |
+| `adjustments` | admin | admin | admin | Nadie |
+| `audit_log` | admin | **Nadie** | **Nadie** | **Nadie** |
+
+«Cualquiera» significa *cualquier usuario autenticado y activo*.
+
+Tres cosas que conviene entender de esta tabla:
+
+**Los saldos y el libro no se escriben por la API.** `inventory` e `inventory_movements` tienen `create`, `update` y `delete` en `null`: ni siquiera un administrador puede tocarlos con una petición. Los hooks sí los escriben, porque van por la capa de modelo y no pasan por estas reglas. Es lo que convierte el invariante en una garantía del servidor y no en una buena costumbre del cliente. Para corregir un saldo existe `adjustments`.
+
+**Un usuario desactivado no puede nada.** Todas las reglas incluyen `@request.auth.active = true`. Dar de baja a alguien surte efecto de inmediato, sin esperar a que expire su token. Consecuencia práctica: **al crear un usuario hay que marcar `active`**, o no podrá ni leer el catálogo.
+
+**Una regla de lista que no se cumple filtra, no rechaza.** Si un operador pide `GET /api/collections/audit_log/records`, recibe `200` con `totalItems: 0`, no un `403`. No hay fuga de datos, pero al probar reglas hay que mirar cuántos registros vuelven, no el código de estado.
+
 ### El flujo, y qué movimiento dispara cada paso
 
 | Acción del operador | Transición | Movimiento | Efecto en los saldos |
@@ -528,6 +554,9 @@ Lee [`CLAUDE.md`](CLAUDE.md) — resume el contexto, el estado actual y las rest
 | La contraseña de `admin@akopia.org` no funciona | La migración `023` solo corre una vez. Cambiar `.env` después no cambia nada: usa el panel o borra `pb_data`. Revisa también que no hayas copiado comillas tipográficas. |
 | `git status` ofrece un archivo de 32 MB | Es `pocketbase.exe`. Haz `git pull` para traer el `.gitignore` corregido. |
 | Corrupción rara de `pb_data` o de `.git` | ¿El repositorio está dentro de una carpeta de Google Drive u OneDrive? Muévelo a una ruta local. |
+| Un usuario recién creado no ve nada, ni el catálogo | Le falta `active`. Todas las reglas exigen `@request.auth.active = true`. |
+| `validation_values_mismatch` en `verified` al crear un usuario | `verified` no se puede fijar por API. Créalo sin ese campo, o márcalo desde el panel. |
+| `403` al escribir en `inventory` o `inventory_movements` | Es deliberado: solo los hooks los escriben. Para corregir un saldo, crea un `adjustments`. |
 
 ---
 
