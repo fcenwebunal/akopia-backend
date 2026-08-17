@@ -1,13 +1,20 @@
 // ─────────────────────────────────────────────────────────────
-// 01_helpers.js — Shared utility functions for Akopia hooks
+// utils/helpers.js — Shared utilities for Akopia hooks
+//
+// Not a hook file: PocketBase only auto-loads pb_hooks/**/*.pb.js.
+// Handlers pull this in with require(`${__hooks}/utils/helpers.js`),
+// which is the only way to share code — each handler is serialized
+// and run in its own isolated context, so file-level scope is not
+// visible from inside a hook.
+//
 // All identifiers and internal strings in English.
 // User-visible error strings in Spanish.
+//
+// Every helper takes `app` as its first argument, and inside a hook
+// that must be `e.app`: it participates in the request transaction,
+// while `$app` does not and would leave inventory writes committed
+// even when the request later fails.
 // ─────────────────────────────────────────────────────────────
-
-// Status cache used to capture pre-update field values between
-// beforeUpdate and afterUpdate hooks. PocketBase JSVM is
-// single-threaded (goja engine), so no race conditions.
-globalThis._beforeUpdateCache = {};
 
 function getOperatorId(e) {
   if (e.auth && e.auth.id) {
@@ -16,14 +23,8 @@ function getOperatorId(e) {
   return null;
 }
 
-function generateSequenceCode(prefix, collectionName) {
-  var records = $app.findRecordsByFilter(
-    collectionName,
-    "",
-    "-code",
-    1,
-    0
-  );
+function generateSequenceCode(app, prefix, collectionName) {
+  var records = app.findRecordsByFilter(collectionName, "", "-code", 1, 0);
 
   if (records.length > 0) {
     var lastCode = records[0].get("code");
@@ -37,13 +38,7 @@ function generateSequenceCode(prefix, collectionName) {
           lastCode +
           "', defaulting to record count"
       );
-      var allRecords = $app.findRecordsByFilter(
-        collectionName,
-        "",
-        "",
-        0,
-        0
-      );
+      var allRecords = app.findRecordsByFilter(collectionName, "", "", 0, 0);
       parsed = allRecords.length;
     }
     var nextNum = parsed + 1;
@@ -53,31 +48,46 @@ function generateSequenceCode(prefix, collectionName) {
   return prefix + "000001";
 }
 
-function findOrCreateInventory(productId, locationId, unitId) {
-  var loc = locationId || "";
-  var filter = "product_id = '" + productId + "' && location_id = '" + loc + "'";
+// findFirstRecordByFilter throws when there is no match, so every
+// lookup that may legitimately come back empty goes through here.
+function findInventory(app, productId, locationId) {
+  var filter =
+    "product_id = '" +
+    productId +
+    "' && location_id = '" +
+    (locationId || "") +
+    "'";
 
-  var existing = $app.findFirstRecordByFilter("inventory", filter);
+  try {
+    return app.findFirstRecordByFilter("inventory", filter);
+  } catch (err) {
+    return null;
+  }
+}
+
+function findOrCreateInventory(app, productId, locationId, unitId) {
+  var existing = findInventory(app, productId, locationId);
   if (existing) {
     return existing;
   }
 
-  var collection = $app.findCollectionByNameOrId("inventory");
+  var collection = app.findCollectionByNameOrId("inventory");
   var record = new Record(collection);
   record.set("product_id", productId);
-  record.set("location_id", loc);
+  record.set("location_id", locationId || "");
   record.set("unit_id", unitId);
   record.set("available_qty", 0);
   record.set("reserved_qty", 0);
   record.set("quarantine_qty", 0);
   record.set("total_qty", 0);
   record.set("last_movement_at", new Date().toISOString());
-  $app.save(record);
+  app.save(record);
 
   return record;
 }
 
 function createInventoryMovement(
+  app,
   movementType,
   productId,
   locationId,
@@ -88,7 +98,7 @@ function createInventoryMovement(
   operatorId,
   notes
 ) {
-  var collection = $app.findCollectionByNameOrId("inventory_movements");
+  var collection = app.findCollectionByNameOrId("inventory_movements");
   var record = new Record(collection);
   record.set("movement_type", movementType);
   record.set("product_id", productId);
@@ -99,12 +109,12 @@ function createInventoryMovement(
   record.set("reference_id", referenceId || "");
   record.set("operator_id", operatorId);
   record.set("notes", notes || "");
-  $app.save(record);
+  app.save(record);
 
   return record;
 }
 
-function updateInventoryQuantities(inventoryRecord, movementType, quantity) {
+function updateInventoryQuantities(app, inventoryRecord, movementType, quantity) {
   var available = inventoryRecord.get("available_qty") || 0;
   var reserved = inventoryRecord.get("reserved_qty") || 0;
   var quarantine = inventoryRecord.get("quarantine_qty") || 0;
@@ -174,10 +184,11 @@ function updateInventoryQuantities(inventoryRecord, movementType, quantity) {
   inventoryRecord.set("total_qty", available + reserved + quarantine);
   inventoryRecord.set("last_movement_at", new Date().toISOString());
 
-  $app.save(inventoryRecord);
+  app.save(inventoryRecord);
 }
 
 function createAuditLog(
+  app,
   entityType,
   entityId,
   action,
@@ -185,7 +196,7 @@ function createAuditLog(
   operatorId,
   notes
 ) {
-  var collection = $app.findCollectionByNameOrId("audit_log");
+  var collection = app.findCollectionByNameOrId("audit_log");
   var record = new Record(collection);
   record.set("entity_type", entityType);
   record.set("entity_id", entityId);
@@ -193,7 +204,17 @@ function createAuditLog(
   record.set("changes", changes);
   record.set("operator_id", operatorId);
   record.set("notes", notes || "");
-  $app.save(record);
+  app.save(record);
 
   return record;
 }
+
+module.exports = {
+  getOperatorId: getOperatorId,
+  generateSequenceCode: generateSequenceCode,
+  findInventory: findInventory,
+  findOrCreateInventory: findOrCreateInventory,
+  createInventoryMovement: createInventoryMovement,
+  updateInventoryQuantities: updateInventoryQuantities,
+  createAuditLog: createAuditLog,
+};

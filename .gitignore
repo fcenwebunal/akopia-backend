@@ -1,3 +1,22 @@
-.kilo
+# Estado local: nunca se comparte
 pb_data
+pb_data_backup
+
+# Binario de PocketBase: cada quien descarga el suyo
 pocketbase
+pocketbase.exe
+CHANGELOG.md
+LICENSE.md
+*.zip
+
+# Secretos
+.env
+.env.local
+
+# Logs
+*.log
+
+# Herramientas y sistema operativo
+.kilo
+.DS_Store
+Thumbs.db
