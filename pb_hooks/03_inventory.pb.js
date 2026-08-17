@@ -92,6 +92,11 @@ onRecordUpdateRequest((e) => {
 
   // Transitions that move stock between the three buckets. Anything
   // not listed here is a status change with no inventory effect.
+  //
+  // `rejected` is treated exactly like `pending`: neither ever entered
+  // the inventory, so reclassifying either one into a stocked status is
+  // an `entrada`. Leaving rejected out would let an item show up as
+  // available with nothing behind it.
   const TRANSITIONS = {
     "pending>available": {
       type: "entrada",
@@ -100,6 +105,14 @@ onRecordUpdateRequest((e) => {
     "pending>quarantine": {
       type: "cuarentena",
       notes: "Clasificación: producto en cuarentena",
+    },
+    "rejected>available": {
+      type: "entrada",
+      notes: "Reclasificación: producto rechazado aceptado",
+    },
+    "rejected>quarantine": {
+      type: "cuarentena",
+      notes: "Reclasificación: producto rechazado enviado a cuarentena",
     },
     "quarantine>available": {
       type: "liberar_cuarentena",
@@ -211,11 +224,7 @@ onRecordUpdateRequest((e) => {
 // ── reservations: commit stock to an approved request ────────
 
 onRecordCreateRequest((e) => {
-  const {
-    getOperatorId,
-    createInventoryMovement,
-    updateInventoryQuantities,
-  } = require(`${__hooks}/utils/helpers.js`);
+  const { getOperatorId, applyReservationEffect } = require(`${__hooks}/utils/helpers.js`);
 
   const originalApp = e.app;
 
@@ -260,16 +269,11 @@ onRecordCreateRequest((e) => {
         );
       }
 
-      updateInventoryQuantities(e.app, inventory, "reserva", quantity);
-
-      createInventoryMovement(
+      applyReservationEffect(
         e.app,
+        inventory,
         "reserva",
-        inventory.get("product_id"),
-        inventory.get("location_id"),
-        inventory.get("unit_id"),
         quantity,
-        "request",
         e.record.get("request_item_id"),
         operatorId,
         "Reserva para solicitud de ayuda"
@@ -281,11 +285,7 @@ onRecordCreateRequest((e) => {
 }, "reservations");
 
 onRecordUpdateRequest((e) => {
-  const {
-    getOperatorId,
-    createInventoryMovement,
-    updateInventoryQuantities,
-  } = require(`${__hooks}/utils/helpers.js`);
+  const { getOperatorId, applyReservationEffect } = require(`${__hooks}/utils/helpers.js`);
 
   const TRANSITIONS = {
     "activa>liberada": {
@@ -307,6 +307,18 @@ onRecordUpdateRequest((e) => {
       const previous = e.record.original();
       const oldStatus = previous.get("status");
       const newStatus = e.record.get("status");
+
+      // Una reserva cerrada es un hecho consumado. Reabrirla dejaría una
+      // reserva "activa" sin stock comprometido detrás, y al liberarla
+      // después se devolvería a disponible una cantidad que nunca se
+      // restó: inventario inventado.
+      if (oldStatus !== "activa" && oldStatus !== newStatus) {
+        throw new BadRequestError(
+          "Una reserva " +
+            oldStatus +
+            " no puede cambiar de estado. Cree una reserva nueva"
+        );
+      }
 
       if (oldStatus === "activa") {
         if (
@@ -342,18 +354,12 @@ onRecordUpdateRequest((e) => {
         "inventory",
         e.record.get("inventory_id")
       );
-      const quantity = e.record.get("quantity_reserved");
 
-      updateInventoryQuantities(e.app, inventory, transition.type, quantity);
-
-      createInventoryMovement(
+      applyReservationEffect(
         e.app,
+        inventory,
         transition.type,
-        inventory.get("product_id"),
-        inventory.get("location_id"),
-        inventory.get("unit_id"),
-        quantity,
-        "request",
+        e.record.get("quantity_reserved"),
         e.record.get("request_item_id"),
         operatorId,
         transition.notes

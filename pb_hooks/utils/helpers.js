@@ -114,74 +114,70 @@ function createInventoryMovement(
   return record;
 }
 
+// Efecto de cada tipo sobre las tres cubetas. Es el mapa de movimientos
+// hecho código: si alguna vez hay que cambiar la aritmética, se cambia
+// aquí y en ningún otro sitio.
+var MOVEMENT_EFFECTS = {
+  entrada: { available: 1 },
+  devolucion: { available: 1 },
+  ajuste_positivo: { available: 1 },
+  ajuste_negativo: { available: -1 },
+  salida: { reserved: -1 },
+  reserva: { available: -1, reserved: 1 },
+  liberacion: { available: 1, reserved: -1 },
+  cuarentena: { quarantine: 1 },
+  liberar_cuarentena: { available: 1, quarantine: -1 },
+  traslado_a_cuarentena: { available: -1, quarantine: 1 },
+};
+
+var BUCKET_LABELS = {
+  available: "disponible",
+  reserved: "reservada",
+  quarantine: "en cuarentena",
+};
+
 function updateInventoryQuantities(app, inventoryRecord, movementType, quantity) {
-  var available = inventoryRecord.get("available_qty") || 0;
-  var reserved = inventoryRecord.get("reserved_qty") || 0;
-  var quarantine = inventoryRecord.get("quarantine_qty") || 0;
-
-  switch (movementType) {
-    case "entrada":
-    case "devolucion":
-    case "ajuste_positivo":
-      available += quantity;
-      break;
-
-    case "salida":
-      reserved -= quantity;
-      break;
-
-    case "reserva":
-      available -= quantity;
-      reserved += quantity;
-      break;
-
-    case "liberacion":
-      reserved -= quantity;
-      available += quantity;
-      break;
-
-    case "ajuste_negativo":
-      available -= quantity;
-      break;
-
-    case "cuarentena":
-      quarantine += quantity;
-      break;
-
-    case "liberar_cuarentena":
-      quarantine -= quantity;
-      available += quantity;
-      break;
-
-    case "traslado_a_cuarentena":
-      available -= quantity;
-      quarantine += quantity;
-      break;
-  }
-
-  if (available < 0) {
-    console.warn(
-      "available_qty clamped to 0 for inventory record: " + inventoryRecord.id
+  var effect = MOVEMENT_EFFECTS[movementType];
+  if (!effect) {
+    throw new BadRequestError(
+      "Tipo de movimiento de inventario desconocido: " + movementType
     );
-    available = 0;
-  }
-  if (reserved < 0) {
-    console.warn(
-      "reserved_qty clamped to 0 for inventory record: " + inventoryRecord.id
-    );
-    reserved = 0;
-  }
-  if (quarantine < 0) {
-    console.warn(
-      "quarantine_qty clamped to 0 for inventory record: " + inventoryRecord.id
-    );
-    quarantine = 0;
   }
 
-  inventoryRecord.set("available_qty", available);
-  inventoryRecord.set("reserved_qty", reserved);
-  inventoryRecord.set("quarantine_qty", quarantine);
-  inventoryRecord.set("total_qty", available + reserved + quarantine);
+  var buckets = {
+    available: inventoryRecord.get("available_qty") || 0,
+    reserved: inventoryRecord.get("reserved_qty") || 0,
+    quarantine: inventoryRecord.get("quarantine_qty") || 0,
+  };
+
+  for (var bucket in effect) {
+    buckets[bucket] += effect[bucket] * quantity;
+
+    // Un saldo que se iría a negativo significa que la operación no debía
+    // ocurrir. Recortarlo a cero dejaría el movimiento escrito con una
+    // cantidad que el saldo ya no refleja, y el libro dejaría de explicar
+    // el inventario — que es la única garantía que sostiene el modelo.
+    if (buckets[bucket] < 0) {
+      throw new BadRequestError(
+        "Cantidad " +
+          BUCKET_LABELS[bucket] +
+          " insuficiente para registrar el movimiento '" +
+          movementType +
+          "'. Disponible: " +
+          (buckets[bucket] - effect[bucket] * quantity) +
+          ", solicitado: " +
+          quantity
+      );
+    }
+  }
+
+  inventoryRecord.set("available_qty", buckets.available);
+  inventoryRecord.set("reserved_qty", buckets.reserved);
+  inventoryRecord.set("quarantine_qty", buckets.quarantine);
+  inventoryRecord.set(
+    "total_qty",
+    buckets.available + buckets.reserved + buckets.quarantine
+  );
   inventoryRecord.set("last_movement_at", new Date().toISOString());
 
   app.save(inventoryRecord);
@@ -209,7 +205,109 @@ function createAuditLog(
   return record;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Operaciones de negocio
+//
+// Los hooks de `03_inventory.pb.js` son de PETICIÓN: se disparan cuando
+// un cliente llama a la API, pero NO cuando una ruta personalizada crea
+// o modifica un registro con app.save(), que va por la capa de modelo.
+//
+// Por eso el efecto en inventario de cada operación vive aquí: los hooks
+// lo invocan para las llamadas REST y las rutas lo invocan directamente.
+// Un solo sitio donde está escrito qué le pasa al inventario, sin riesgo
+// de que los dos caminos se separen.
+// ─────────────────────────────────────────────────────────────
+
+// Crea una reserva activa y compromete el stock.
+function reserveInventory(app, requestItemId, inventory, quantity, operatorId) {
+  var collection = app.findCollectionByNameOrId("reservations");
+  var reservation = new Record(collection);
+  reservation.set("request_item_id", requestItemId);
+  reservation.set("inventory_id", inventory.id);
+  reservation.set("quantity_reserved", quantity);
+  reservation.set("status", "activa");
+  reservation.set("operator_id", operatorId);
+  app.save(reservation);
+
+  applyReservationEffect(app, inventory, "reserva", quantity, requestItemId, operatorId,
+    "Reserva para solicitud de ayuda");
+
+  return reservation;
+}
+
+// Cambia el estado de una reserva activa y mueve el stock en consecuencia.
+// `newStatus` debe ser "liberada" (vuelve a disponible) o "consumida"
+// (sale de bodega).
+function closeReservation(app, reservation, newStatus, operatorId) {
+  var TRANSITIONS = {
+    liberada: {
+      type: "liberacion",
+      notes: "Reserva liberada — producto devuelto a disponible",
+    },
+    consumida: {
+      type: "salida",
+      notes: "Salida por entrega confirmada",
+    },
+  };
+
+  var transition = TRANSITIONS[newStatus];
+  if (!transition) {
+    throw new BadRequestError("Estado de reserva no válido: " + newStatus);
+  }
+
+  if (reservation.get("status") !== "activa") {
+    throw new BadRequestError(
+      "Solo se puede cerrar una reserva activa. Estado actual: " +
+        reservation.get("status")
+    );
+  }
+
+  var quantity = reservation.get("quantity_reserved");
+  var inventory = app.findRecordById("inventory", reservation.get("inventory_id"));
+
+  reservation.set("status", newStatus);
+  app.save(reservation);
+
+  applyReservationEffect(app, inventory, transition.type, quantity,
+    reservation.get("request_item_id"), operatorId, transition.notes);
+
+  return reservation;
+}
+
+function applyReservationEffect(app, inventory, movementType, quantity, requestItemId, operatorId, notes) {
+  updateInventoryQuantities(app, inventory, movementType, quantity);
+
+  createInventoryMovement(
+    app,
+    movementType,
+    inventory.get("product_id"),
+    inventory.get("location_id"),
+    inventory.get("unit_id"),
+    quantity,
+    "request",
+    requestItemId,
+    operatorId,
+    notes
+  );
+}
+
+// Todas las reservas activas de una solicitud, en cualquiera de sus renglones.
+function findActiveReservations(app, requestId) {
+  return app.findRecordsByFilter(
+    "reservations",
+    "status = 'activa' && request_item_id.request_id = {:requestId}",
+    "created",
+    0,
+    0,
+    { requestId: requestId }
+  );
+}
+
 module.exports = {
+  reserveInventory: reserveInventory,
+  closeReservation: closeReservation,
+  applyReservationEffect: applyReservationEffect,
+  findActiveReservations: findActiveReservations,
   getOperatorId: getOperatorId,
   generateSequenceCode: generateSequenceCode,
   findInventory: findInventory,

@@ -131,3 +131,24 @@ Dos cosas aprendidas al probarlo:
 - **Una `listRule` que no se cumple filtra, no rechaza:** devuelve `200` con `totalItems: 0`, no `403`. Al probar reglas hay que contar registros, no mirar el código de estado — mi primera prueba daba «PERMITE» donde en realidad bloqueaba.
 
 También corregido en el frontend: `UserRole` declaraba `"admin" | "operador" | "consulta"` cuando el esquema solo admite `admin` y `operator`.
+
+### 2026-08-17 (noche) — Auditoría de hooks, correcciones y rutas propias
+
+**Auditoría** completa en [`AUDITORIA-HOOKS.md`](AUDITORIA-HOOKS.md): 41 comprobaciones correctas, 6 hallazgos críticos, 5 advertencias. La aritmética de inventario estaba bien —los diez tipos coinciden con el mapa y `total_qty` se recalcula como suma— pero había seis caminos por los que el libro y los saldos podían separarse.
+
+Corregidos y verificados contra el servidor:
+
+- **C1 — el recorte a cero.** `updateInventoryQuantities` subía a 0 cualquier saldo negativo y recalculaba el total desde el valor corregido: el movimiento quedaba escrito con una cantidad que el saldo ya no reflejaba, y solo un `console.warn` lo registraba. Ahora **lanza y revierte**. La aritmética pasó de un `switch` a la tabla `MOVEMENT_EFFECTS`, que es el mapa hecho código.
+- **C2** — un tipo de movimiento desconocido no hacía nada y el movimiento se escribía igual. Ahora lanza.
+- **C3** — `rejected → available` no estaba en `TRANSITIONS` y la guarda no protegía el estado `rejected`: un artículo rechazado podía pasar a disponible sin generar movimiento. Un rechazado nunca entró al inventario, igual que un pendiente, así que ahora genera `entrada`.
+- **C4** — una reserva `liberada` o `consumida` podía volver a `activa` sin reservar nada; al liberarla después se habría inventado inventario. Bloqueado.
+- **C5** — migración `027`: las cantidades de `adjustments` eran `required: true` y PocketBase trata el 0 como vacío, así que no se podían dar de alta existencias no registradas (`quantity_before: 0`) ni bajar un saldo a cero.
+- **C6 — `devolucion` se dejó sin implementar a propósito.** Lo reservado no sale de bodega hasta confirmar la entrega: si falla, se libera la reserva, no se devuelve nada. Una devolución real es mercancía que ya salió y vuelve después, y eso necesita su propio modelo.
+
+**Seis rutas propias** en `05_routes.pb.js`: `approve`, `reject`, `cancel`, `availability`, `inventory/summary` y `confirm-delivery`. Las tres restantes del documento (`reserve`, `prepare`, `dispatch`) se hacen con CRUD estándar.
+
+Tres cosas aprendidas, todas documentadas en el README §6b:
+
+- **Los hooks son de petición: `app.save()` dentro de una ruta NO los dispara.** Por eso el efecto en inventario se extrajo a `reserveInventory`, `closeReservation` y `applyReservationEffect` en `utils/helpers.js`, que invocan los dos caminos. Es el riesgo más serio al agregar rutas.
+- **Los parámetros de ruta van entre llaves** (`{id}`) desde la 0.23, no `:id` como en Echo.
+- **`BadRequestError` no sirve para devolver datos:** su segundo argumento se interpreta como errores de validación por campo. Para responder con estructura propia hay que usar `e.json(400, ...)`, lo que obliga a validar antes de abrir la transacción.

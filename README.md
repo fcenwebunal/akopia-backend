@@ -449,6 +449,62 @@ Si los seis pasos pasan, el cambio está listo para PR. En vez de hacerlos a man
 ./scripts/verificar.sh      # Git Bash / Linux / macOS
 ```
 
+---
+
+## 6b. Rutas propias
+
+La API REST resuelve el CRUD, pero hay operaciones que tocan varias colecciones y **tienen que ocurrir enteras o no ocurrir**. Aprobar una solicitud desde el cliente serían siete llamadas: si la cuarta falla, la solicitud queda aprobada con media reserva y el inventario comprometido a medias.
+
+Están en [`pb_hooks/05_routes.pb.js`](pb_hooks/05_routes.pb.js), cada una envuelta en una transacción.
+
+| Método | Ruta | Qué hace | Rol |
+|---|---|---|---|
+| `POST` | `/api/requests/{id}/approve` | Aprueba y reserva el inventario de todos los renglones | admin |
+| `POST` | `/api/requests/{id}/reject` | Rechaza con motivo | admin |
+| `POST` | `/api/requests/{id}/cancel` | Cancela y libera las reservas activas | operador |
+| `GET` | `/api/requests/{id}/availability` | Qué se puede atender, antes de aprobar | operador |
+| `GET` | `/api/inventory/summary` | Inventario agregado por producto, con totales | operador |
+| `POST` | `/api/dispatches/{id}/confirm-delivery` | Registra la entrega y saca de bodega lo entregado | operador |
+
+### `approve` — la que más trabajo ahorra
+
+Comprueba **todos** los renglones antes de reservar ninguno. Reservar a medias y descubrir después que falta un producto dejaría stock comprometido para una solicitud que no se puede atender.
+
+Si falta algo, responde `400` con el detalle:
+
+```json
+{
+  "status": 400,
+  "message": "Inventario insuficiente para completar la solicitud",
+  "missing": [
+    { "product": "Pasta (fideos)", "requested": 200, "available": 100, "shortage": 100 }
+  ]
+}
+```
+
+Si alcanza, crea las reservas, marca los renglones como `reservado` y devuelve la solicitud con sus reservas.
+
+### `confirm-delivery` — cierra el ciclo
+
+| `status` enviado | Qué pasa con las reservas | Estado de la solicitud |
+|---|---|---|
+| `entregado` | Se **consumen**: `salida`, la mercancía sale de bodega | `entregada` |
+| `parcial` | Se consumen | `entregada` |
+| `no_entregado` | Se **liberan**: `liberacion`, el stock vuelve a disponible | `cancelada` |
+
+Lo reservado no sale físicamente hasta confirmar la entrega. Si la entrega falla, la mercancía nunca se movió: se libera la reserva, no se registra una devolución.
+
+### Al escribir una ruta nueva
+
+> **Los hooks de `03_inventory.pb.js` son de PETICIÓN.** No se disparan cuando una ruta guarda con `app.save()`, que va por la capa de modelo.
+
+Por eso el efecto en inventario de cada operación vive en `utils/helpers.js` —`reserveInventory`, `closeReservation`, `applyReservationEffect`— y lo invocan **los dos caminos**: los hooks para las llamadas REST y las rutas directamente. Si escribes una ruta que mueve inventario y no llamas a esas funciones, el saldo no se actualiza y nadie te avisa.
+
+Dos detalles más:
+
+- **Los parámetros van entre llaves:** `/api/requests/{id}/approve`, y se leen con `e.request.pathValue("id")`. La sintaxis `:id` es de antes de la 0.23.
+- **`BadRequestError` no sirve para devolver datos.** Su segundo argumento lo interpreta PocketBase como errores de validación por campo. Para responder con una estructura propia hay que usar `e.json(400, ...)`, lo que obliga a validar antes de abrir la transacción.
+
 ### Idioma en el código
 
 - **Identificadores, nombres de archivo, comentarios y commits: en inglés.**
