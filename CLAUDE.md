@@ -162,3 +162,15 @@ Las cinco advertencias de la auditoría quedaron cerradas. Nuevo script `scripts
 - **A3** — migración `028` con la colección `sequences`. El número se reserva dentro de la transacción que inserta el registro, así que SQLite serializa. El hook de códigos ahora abre transacción, que antes no lo hacía. Comprobado con 12 donaciones en paralelo: 12 códigos únicos, cero errores.
 - **A4** — `hasChanged` en la auditoría: compara por identidad y solo serializa cuando ambos lados son objetos.
 - **A5** — se mantiene como diseño. Atribuir un movimiento a un usuario genérico vaciaría de sentido la trazabilidad. Solo cambió el mensaje, que ahora dice qué hacer.
+
+### 2026-08-17 (noche) — Propuesta de modelo con variantes y lotes
+
+[`PROPUESTA-MODELO-INVENTARIO.md`](PROPUESTA-MODELO-INVENTARIO.md). **Pendiente de aprobación, nada implementado.** Responde a las dos decisiones abiertas: inventario por variante, y marca sí — pero con un matiz que cambia el diseño.
+
+- **La marca no resuelve el balance monetario; el lote sí.** El valor no es atributo de *qué es* la cosa sino de *cuándo entró*: tres recepciones de la misma variante tienen tres valores distintos. Guardarlo en la variante solo cambia «promediar entre marcas» por «promediar dentro de la marca».
+- **Modelo de cuatro niveles:** producto → variante (qué es, código de barras) → lote (qué valía, cuándo vence) → saldo (dónde está). Es la estructura estándar de bodega y encaja con lo que ya hay.
+- **El lote no cuesta ni un gesto más de captura:** se deduce de lo que ya se teclea (vencimiento + código de lote). El operario nunca ve la palabra «lote». El valor unitario se captura **una vez por donación**, no por línea.
+- Con lotes salen gratis **FEFO** y las **alertas de vencimiento**, hoy imposibles porque el saldo no sabe de fechas.
+- **Riesgos de volumen, con números:** ~1M de movimientos en 5 años, que a SQLite no le pesan. Los problemas reales son otros: filas de saldo en cero (archivado), recalcular saldos leyendo el libro (cierre mensual), y el deterioro del catálogo (`brands` como colección + buscar antes de crear + revisión y fusión).
+- **El corazón no se toca:** las tres cubetas, los diez movimientos, la transaccionalidad y la auditoría siguen igual. Solo cambia *a qué* se le lleva el saldo, así que `verificar-auditoria.ps1` sigue siendo la red.
+- **Hacerlo ahora son migraciones sobre tablas vacías.** Con datos encima habría que repartir el inventario en lotes sin conocer sus vencimientos ni sus valores — datos irrecuperables.
