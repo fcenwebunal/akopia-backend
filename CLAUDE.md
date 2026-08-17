@@ -110,3 +110,9 @@ Pendientes y decisiones abiertas: [README §8](README.md#8-estado-actual-y-pendi
 - Agregada [`DESPLIEGUE.md`](DESPLIEGUE.md) con el procedimiento completo: reconocimiento del servidor, endurecimiento del acceso, usuario de sistema `akopia`, los dos servicios de systemd, nginx con el panel `/_/` restringido, cortafuegos y respaldos.
 - **Las credenciales del servidor no van en el repositorio.** La contraseña inicial llegó por correo en texto plano y debe cambiarse en el primer ingreso.
 - Pendiente de OTIC: VPN para `judiazgom`, confirmar `sudo` para `juan`, subdominio `acopio.manizales.unal.edu.co` y certificado TLS (lo emite la Universidad, no se instala certbot).
+
+### 2026-08-17 (noche) — Respuestas de OTIC
+
+- **Cliente VPN: FortiClient.** Carlos acompaña la configuración una vez instalado; la versión del instalador se pide en el hilo del correo, porque el cliente debe ser compatible con el firmware del FortiGate.
+- **El servidor es Ubuntu y `juan` tiene `sudo`.** El despliegue de `DESPLIEGUE.md` aplica tal cual.
+- Sigue pendiente el subdominio y el certificado TLS, y confirmar si `172.23.177.12` es fija o asignada por DHCP.

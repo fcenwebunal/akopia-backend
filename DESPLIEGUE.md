@@ -22,25 +22,42 @@ Tienes dos formas de llegar:
 1. **Desde la red del campus**, cableada o WiFi institucional. Sirve para empezar hoy mismo si estás en la sede.
 2. **Por VPN**, desde cualquier lado. Es lo que hay que gestionar.
 
-### Sobre la VPN
+### La VPN: FortiClient
 
-El mensaje de Carlos dice *«Favor generar la VPN para el usuario judiazgom»*. Conviene aclarar con él quién la genera, porque se puede leer de dos maneras: que él ya la solicitó, o que tú debes pedirla.
+**Confirmado por OTIC (Carlos, 17 ago 2026):** el cliente es **FortiClient**, y él acompaña la configuración una vez esté instalado. La versión exacta se solicita en el hilo del correo — **conviene pedirla en vez de bajar la última**, porque el cliente tiene que ser compatible con el firmware del concentrador FortiGate.
 
-El cliente y el portal **cambian según la sede** (Bogotá usa Cisco AnyConnect, Medellín tiene su propio portal), así que pídele a Carlos los datos concretos de Manizales en vez de seguir un instructivo de otra sede.
+#### Instalar FortiClient en Windows
 
-**Responde a Carlos confirmando esto:**
+> ⚠️ **Descárgalo solo de `fortinet.com`.** FortiClient es de los instaladores más suplantados en sitios agregadores de descargas: buscarlo en Google y hacer clic en el primer resultado es una forma conocida de terminar con un troyano. Si Carlos te manda el instalador directamente, usa ese.
 
-> Buenas tardes Carlos, gracias.
->
-> Confirmo recibido el acceso a `172.23.177.12`. Tres cosas para poder avanzar:
->
-> 1. **VPN:** ¿la gestionan ustedes para `judiazgom` o debo radicar la solicitud yo? En ese caso, ¿por cuál canal y con qué cliente (AnyConnect, GlobalProtect, otro)?
-> 2. **Permisos:** ¿el usuario `juan` tiene `sudo`? Necesito instalar Node.js y nginx, y crear dos servicios de systemd.
-> 3. **Dominio y certificado:** el subdominio que proponemos es `acopio.manizales.unal.edu.co`. ¿Lo crean ustedes y emiten el certificado TLS, o lo gestionamos de otra forma? (Entiendo que no debemos instalar Let's Encrypt contra un dominio institucional.)
->
-> Quedo atento. Juan Manuel Díaz — judiazgom@unal.edu.co
+1. Ve a [fortinet.com/support/product-downloads](https://www.fortinet.com/support/product-downloads).
+2. Busca la sección **FortiClient VPN-only**. Es la versión gratuita, sin licencia ni registro. Las ediciones ZTNA y EPP/APT son de pago y no hacen falta.
+3. Descarga **Windows 64-bit** y ejecuta el instalador. Reinicia si lo pide: instala un adaptador de red virtual.
 
-Las tres respuestas condicionan pasos de esta guía. Sin la 2 no se puede instalar nada; sin la 3, el sitio queda accesible solo por IP.
+#### Datos que faltan para configurarlo
+
+FortiClient no descubre nada solo. Estos son los datos que Carlos tiene que darte, y conviene tenerlos a mano cuando te acompañe:
+
+| Dato | Para qué |
+|---|---|
+| Tipo de conexión | SSL-VPN o IPsec |
+| Dirección del gateway | El concentrador. Con SSL-VPN suele ser un host más un puerto (10443 o 443) |
+| Usuario | `judiazgom`, con credenciales institucionales |
+| Certificado | Si es autofirmado, hay que permitir el aviso de certificado inválido |
+
+#### Comprobar que funcionó
+
+Con la VPN conectada, tu equipo tendrá **dos direcciones a la vez**: la de tu red y una del rango de la Universidad.
+
+```powershell
+Test-NetConnection 172.23.177.12 -Port 22
+```
+
+`TcpTestSucceeded : True`, y el campo `SourceAddress` ya no muestra tu red doméstica sino una de la UNAL. Ese cambio es la señal de que estás dentro.
+
+### Pendiente con OTIC
+
+El **dominio y el certificado** siguen sin resolverse. El subdominio propuesto es `acopio.manizales.unal.edu.co`; hay que confirmar si OTIC lo crea y emite el certificado TLS. Sin eso, el sitio queda accesible solo por IP y sin HTTPS — suficiente para desarrollo y demos internas, **no para operar con datos reales de donantes**.
 
 ---
 
@@ -54,7 +71,7 @@ ssh juan@172.23.177.12
 
 > En PowerShell, `ssh` funciona igual (viene con Windows 10+). Si la contraseña da problemas al pegarla, escríbela a mano: contiene `&`, que algunos terminales interpretan.
 
-Antes de instalar nada, mira qué te entregaron:
+**Confirmado por OTIC:** el servidor es **Ubuntu** y el usuario `juan` **tiene `sudo`**. Aun así, conviene mirar qué versión y con qué recursos:
 
 ```bash
 # Qué sistema es y cuánto tiene
@@ -382,9 +399,10 @@ sudo systemctl restart akopia-frontend
 
 | Pendiente | Por qué importa |
 |---|---|
-| **VPN para `judiazgom`** | Sin ella solo se puede trabajar desde el campus |
-| **Confirmar `sudo` para `juan`** | Sin permisos no se instala Node, nginx ni los servicios |
+| ~~VPN para `judiazgom`~~ | ✅ Confirmado: FortiClient. Falta la versión del instalador |
+| ~~Confirmar `sudo` para `juan`~~ | ✅ Confirmado: Ubuntu con `sudo` |
 | **Subdominio `acopio.manizales.unal.edu.co`** | Sin guiones y sin `www`, según la directriz B1 |
+| **¿La IP es fija o por DHCP?** | Si cambia sola, todo lo que apunte a ella se rompe sin aviso |
 | **Certificado TLS** | Lo emite la Universidad. **No instalar certbot** contra un dominio institucional |
 | **Acceso al panel `/_/`** | Acordar si se restringe por IP o se cierra y se usa túnel SSH |
 | **Política de respaldos** | Si OTIC ya respalda la VM, se evita duplicar |
