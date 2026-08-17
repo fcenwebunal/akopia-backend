@@ -38,19 +38,19 @@ Dos procesos y un archivo. No hay Docker, no hay base de datos que instalar, no 
 
 **Dato clave:** el navegador habla con los dos. Descarga la página de `:3000` y desde ahí llama directamente a `:8090`. El frontend **no** hace de intermediario; no hay proxy en desarrollo.
 
-| Proceso | Puerto | Qué pasa si no está |
-|---|---|---|
-| PocketBase | 8090 | La web carga, pero no puedes entrar: *«No se pudo conectar con el servidor»* |
-| Next.js | 3000 | No hay web. La API sigue respondiendo a `curl` y el panel `/_/` funciona |
+| Proceso    | Puerto | Qué pasa si no está                                                           |
+| ---------- | ------ | ------------------------------------------------------------------------------- |
+| PocketBase | 8090   | La web carga, pero no puedes entrar:*«No se pudo conectar con el servidor»* |
+| Next.js    | 3000   | No hay web. La API sigue respondiendo a`curl` y el panel `/_/` funciona     |
 
 ---
 
 ## 2. Requisitos
 
-| | Comprobar con | Mínimo |
-|---|---|---|
-| git | `git --version` | cualquiera reciente |
-| Node.js | `node --version` | **20 o superior** |
+|            | Comprobar con            | Mínimo                       |
+| ---------- | ------------------------ | ----------------------------- |
+| git        | `git --version`        | cualquiera reciente           |
+| Node.js    | `node --version`       | **20 o superior**       |
 | PocketBase | se descarga en el paso 3 | **exactamente 0.39.11** |
 
 > ⚠️ **No clones dentro de `G:\Mi unidad\`, OneDrive ni Dropbox.** Sincronizan archivo por archivo y corrompen tanto `.git/` como el `pb_data/*.db` que el servidor mantiene abierto, y `node_modules/` de paso. Usa una ruta local, por ejemplo `D:\Sistema\Carpetas\Programacion\WEB\AKOPIA\`.
@@ -81,6 +81,7 @@ cd akopia-backend
 El binario **no está en el repositorio**: cada quien descarga el suyo. La versión importa, porque la API de hooks cambió en la 0.23.
 
 **Windows (PowerShell)**
+
 ```powershell
 curl.exe -L -o pb.zip https://github.com/pocketbase/pocketbase/releases/download/v0.39.11/pocketbase_0.39.11_windows_amd64.zip
 Expand-Archive -Path pb.zip -DestinationPath . -Force
@@ -91,6 +92,7 @@ Remove-Item pb.zip
 > En Windows, `tar -xf` **no** sirve para este zip aunque exista el comando. Usa `Expand-Archive`.
 
 **Linux / macOS**
+
 ```bash
 curl -L -o pb.zip https://github.com/pocketbase/pocketbase/releases/download/v0.39.11/pocketbase_0.39.11_linux_amd64.zip
 unzip pb.zip && rm pb.zip CHANGELOG.md LICENSE.md
@@ -119,12 +121,14 @@ AKOPIA_INITIAL_ADMIN_PASSWORD=UnaClaveLargaSoloParaLocal
 ### 3.4 Arrancar
 
 **Windows (PowerShell)**
+
 ```powershell
 $env:AKOPIA_INITIAL_ADMIN_PASSWORD = "UnaClaveLargaSoloParaLocal"
 .\pocketbase.exe serve
 ```
 
 **Git Bash / Linux / macOS**
+
 ```bash
 set -a; . ./.env; set +a
 ./pocketbase serve
@@ -151,25 +155,37 @@ Abre ese último enlace y crea **tu** superusuario con tu propio correo.
 
 > ### Hay DOS identidades y confundirlas cuesta media tarde
 >
-> | | `admin@akopia.org` | Tu superusuario |
-> |---|---|---|
-> | **Vive en** | Colección `users` | Tabla interna `_superusers` |
-> | **Sirve para** | Login de la app, consumir la API | Entrar al panel `/_/` |
-> | **Sale de** | Migración `023` + tu `.env` | El enlace `#/pbinstall/...` |
-> | **Se comparte** | Sí, es del proyecto | No, es personal y local |
+> |                       | `admin@akopia.org`             | Tu superusuario              |
+> | --------------------- | -------------------------------- | ---------------------------- |
+> | **Vive en**     | Colección`users`              | Tabla interna`_superusers` |
+> | **Sirve para**  | Login de la app, consumir la API | Entrar al panel`/_/`       |
+> | **Sale de**     | Migración`023` + tu `.env`  | El enlace`#/pbinstall/...` |
+> | **Se comparte** | Sí, es del proyecto             | No, es personal y local      |
 >
 > `admin@akopia.org` **no entra al panel**. Tu superusuario **no entra a la app**.
+
+### Un tercer superusuario, para el puente de Firebase
+
+El frontend necesita además un superusuario de credenciales fijas para autenticar cuentas de Firebase contra `users` (ver `/api/auth/firebase` en el repo del frontend). Créalo aquí:
+
+```bash
+./pocketbase.exe superuser upsert servicio@akopia.internal "una-clave-larga-y-tuya"
+```
+
+Guarda esa contraseña: va en `POCKETBASE_SERVICE_PASSWORD` del `.env.local` del frontend (paso 4.2). A diferencia de tu superusuario personal, este **no lo usas tú** — solo lo usa el servidor de Next.js, nunca el navegador.
 
 ### 3.6 Comprobar el backend solo
 
 En **otra** terminal, dejando el servidor corriendo en la primera:
 
 **Windows (PowerShell)**
+
 ```powershell
 .\scripts\verificar.ps1
 ```
 
 **Git Bash / Linux / macOS**
+
 ```bash
 ./scripts/verificar.sh
 ```
@@ -227,6 +243,8 @@ NEXT_PUBLIC_PB_URL=http://127.0.0.1:8090
 
 > Las variables `NEXT_PUBLIC_*` **se incrustan en el build**. Si cambias este archivo, reinicia `npm run dev` o el cambio no surte efecto.
 
+Completa también las dos secciones de Firebase del mismo archivo: la configuración web del proyecto "akopia" (no es secreta, pídela a quien lo administra si no la tienes) y `POCKETBASE_SERVICE_EMAIL` / `POCKETBASE_SERVICE_PASSWORD` con las credenciales que acabas de crear arriba — esas sí son secretas. Sin ellas, `/login` sigue funcionando con la contraseña nativa de PocketBase, pero `/registro` no.
+
 ### 4.3 Arrancar
 
 ```bash
@@ -241,14 +259,14 @@ La web queda en **http://localhost:3000**.
 
 Con los dos procesos arriba, seis pruebas. Si las seis pasan, el sistema está bien conectado.
 
-| # | Qué hacer | Qué debe pasar |
-|---|---|---|
-| 1 | Abrir `http://localhost:3000` | Carga la portada con el escudo de la UNAL, el verde institucional y la tipografía Ancízar. **Si las letras se ven genéricas**, las fuentes no cargaron |
-| 2 | Ir a `/login` | Formulario con «Correo institucional» y «Contraseña» |
-| 3 | Entrar con `admin@akopia.org` y tu contraseña de `.env` | Autentica. Si responde *«No se pudo conectar con el servidor»*, el backend no está corriendo o la URL apunta a otro lado |
-| 4 | Abrir `http://127.0.0.1:8090/_/` y entrar con **tu superusuario** | Se ve el panel con las 18 colecciones |
-| 5 | En el panel, abrir `products` | 123 registros |
-| 6 | Correr `verificar.ps1` / `verificar.sh` (§3.6) | Las once comprobaciones en `OK` |
+| # | Qué hacer                                                               | Qué debe pasar                                                                                                                                                |
+| - | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | Abrir`http://localhost:3000`                                           | Carga la portada con el escudo de la UNAL, el verde institucional y la tipografía Ancízar.**Si las letras se ven genéricas**, las fuentes no cargaron |
+| 2 | Ir a`/login`                                                           | Formulario con «Correo institucional» y «Contraseña»                                                                                                      |
+| 3 | Entrar con`admin@akopia.org` y tu contraseña de `.env`              | Autentica. Si responde*«No se pudo conectar con el servidor»*, el backend no está corriendo o la URL apunta a otro lado                                   |
+| 4 | Abrir`http://127.0.0.1:8090/_/` y entrar con **tu superusuario** | Se ve el panel con las 18 colecciones                                                                                                                          |
+| 5 | En el panel, abrir`products`                                           | 123 registros                                                                                                                                                  |
+| 6 | Correr`verificar.ps1` / `verificar.sh` (§3.6)                       | Las once comprobaciones en`OK`                                                                                                                               |
 
 ### La prueba manual, si prefieres hacerla tú
 
@@ -261,6 +279,7 @@ La prueba que separa un backend que funciona de un CRUD crudo: crear una donaci�
 > Dos salidas: usar `curl.exe` (el curl de verdad, incluido en Windows 10+) o usar `Invoke-RestMethod`, que es lo natural en PowerShell y además devuelve objetos en vez de texto. Abajo va la segunda.
 
 **Windows (PowerShell)**
+
 ```powershell
 # 1. Autenticarse
 $body = @{ identity = "admin@akopia.org"; password = "TU_CLAVE" } | ConvertTo-Json
@@ -285,6 +304,7 @@ $r.code                # -> DON-000001
 ```
 
 **Git Bash / Linux / macOS**
+
 ```bash
 # 1. Autenticarse: guarda el token y el record.id de la respuesta
 curl -s -X POST http://127.0.0.1:8090/api/collections/users/auth-with-password \
@@ -313,11 +333,11 @@ Tres cosas explican el 90 % de los problemas de integración.
 
 Todo pasa por `NEXT_PUBLIC_PB_URL`, porque el mismo build tiene que servir en tres sitios:
 
-| Entorno | Valor |
-|---|---|
-| Local | `http://127.0.0.1:8090` |
-| Ubuntu de pruebas | `http://IP-DEL-UBUNTU` |
-| UNAL | `https://acopio.manizales.unal.edu.co` |
+| Entorno           | Valor                                    |
+| ----------------- | ---------------------------------------- |
+| Local             | `http://127.0.0.1:8090`                |
+| Ubuntu de pruebas | `http://IP-DEL-UBUNTU`                 |
+| UNAL              | `https://acopio.manizales.unal.edu.co` |
 
 Si ves una URL literal en un `.tsx`, es un bug.
 
@@ -348,10 +368,10 @@ cd akopia-frontend && npm run dev
 
 ### Después de cada `git pull`
 
-| Repositorio | Qué hacer |
-|---|---|
-| Backend | **Reiniciar el servidor.** Las migraciones nuevas se aplican solas al arrancar |
-| Frontend | `npm install` si cambió `package.json`. Next recarga el resto solo |
+| Repositorio | Qué hacer                                                                           |
+| ----------- | ------------------------------------------------------------------------------------ |
+| Backend     | **Reiniciar el servidor.** Las migraciones nuevas se aplican solas al arrancar |
+| Frontend    | `npm install` si cambió `package.json`. Next recarga el resto solo              |
 
 ### Al cambiar un hook
 
@@ -377,22 +397,22 @@ Así un cambio de esquema rompe la compilación del frontend en vez de romperse 
 
 ## 8. Diagnóstico por síntoma
 
-| Síntoma | Causa y solución |
-|---|---|
-| *«No se pudo conectar con el servidor»* al entrar | PocketBase no está corriendo, o `NEXT_PUBLIC_PB_URL` apunta a otro puerto |
-| El login responde 400 | Contraseña incorrecta. ¿Copiaste comillas tipográficas al `.env`? |
-| `Failed to find all relation records` en `operator_id` | El id enviado no existe en `users`. Usa el `record.id` que devuelve `auth-with-password`, no el correo |
-| `400 validation_required` en `code` | Los hooks no cargan: revisa la extensión `.pb.js` y la versión de PocketBase |
-| `Cannot be blank` en `available_qty` | Falta la migración `025`. `git pull` y reinicia el servidor |
-| La contraseña de `admin@akopia.org` no cambia | La migración `023` corre **una sola vez**. Cambia la clave desde el panel, o borra `pb_data` y siembra de nuevo |
-| Un hook «no hace nada», sin error | Casi siempre es un handler usando una variable de fuera de su cuerpo. Cada handler corre aislado: todo se carga con `require()`. Ver [README §6](README.md#6-los-hooks-la-lógica-de-negocio) |
-| La tipografía se ve genérica | Faltan los `.woff2` en `src/fonts/` del frontend |
-| Cambios en `.env.local` sin efecto | `NEXT_PUBLIC_*` se incrusta en el build: reinicia `npm run dev` |
-| `git status` ofrece un archivo de 32 MB | Es `pocketbase.exe`. Haz `git pull` para traer el `.gitignore` corregido |
-| Puerto 8090 o 3000 ocupado | Otra instancia quedó viva. Windows: `taskkill /F /IM pocketbase.exe` o `/IM node.exe` |
-| `Invoke-WebRequest : No se puede enlazar el parámetro 'Headers'` | Estás pegando comandos de bash en PowerShell. `curl` ahí es un alias de `Invoke-WebRequest`. Usa `curl.exe`, o mejor `.\scripts\verificar.ps1` |
-| `El término '-H' no se reconoce` | Lo mismo: la barra `\` no continúa líneas en PowerShell, así que cada línea se ejecuta suelta. La continuación es `` ` `` |
-| Corrupción rara de `.git`, `pb_data` o `node_modules` | ¿El repositorio está en Google Drive u OneDrive? Muévelo a una ruta local |
+| Síntoma                                                            | Causa y solución                                                                                                                                                                              |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| *«No se pudo conectar con el servidor»* al entrar               | PocketBase no está corriendo, o`NEXT_PUBLIC_PB_URL` apunta a otro puerto                                                                                                                    |
+| El login responde 400                                               | Contraseña incorrecta. ¿Copiaste comillas tipográficas al`.env`?                                                                                                                          |
+| `Failed to find all relation records` en `operator_id`          | El id enviado no existe en`users`. Usa el `record.id` que devuelve `auth-with-password`, no el correo                                                                                    |
+| `400 validation_required` en `code`                             | Los hooks no cargan: revisa la extensión`.pb.js` y la versión de PocketBase                                                                                                                |
+| `Cannot be blank` en `available_qty`                            | Falta la migración`025`. `git pull` y reinicia el servidor                                                                                                                                |
+| La contraseña de`admin@akopia.org` no cambia                     | La migración`023` corre **una sola vez**. Cambia la clave desde el panel, o borra `pb_data` y siembra de nuevo                                                                      |
+| Un hook «no hace nada», sin error                                 | Casi siempre es un handler usando una variable de fuera de su cuerpo. Cada handler corre aislado: todo se carga con`require()`. Ver [README §6](README.md#6-los-hooks-la-lógica-de-negocio) |
+| La tipografía se ve genérica                                      | Faltan los`.woff2` en `src/fonts/` del frontend                                                                                                                                            |
+| Cambios en`.env.local` sin efecto                                 | `NEXT_PUBLIC_*` se incrusta en el build: reinicia `npm run dev`                                                                                                                            |
+| `git status` ofrece un archivo de 32 MB                           | Es`pocketbase.exe`. Haz `git pull` para traer el `.gitignore` corregido                                                                                                                  |
+| Puerto 8090 o 3000 ocupado                                          | Otra instancia quedó viva. Windows:`taskkill /F /IM pocketbase.exe` o `/IM node.exe`                                                                                                      |
+| `Invoke-WebRequest : No se puede enlazar el parámetro 'Headers'` | Estás pegando comandos de bash en PowerShell.`curl` ahí es un alias de `Invoke-WebRequest`. Usa `curl.exe`, o mejor `.\scripts\verificar.ps1`                                        |
+| `El término '-H' no se reconoce`                                 | Lo mismo: la barra`\` no continúa líneas en PowerShell, así que cada línea se ejecuta suelta. La continuación es `` ` ``                                                                |
+| Corrupción rara de`.git`, `pb_data` o `node_modules`         | ¿El repositorio está en Google Drive u OneDrive? Muévelo a una ruta local                                                                                                                   |
 
 ---
 

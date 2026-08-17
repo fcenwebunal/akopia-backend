@@ -1,5 +1,19 @@
 # Propuesta — Modelo de inventario con variantes y lotes
 
+> ## ⛔ DECISIÓN TOMADA — 17 ago 2026: esta propuesta queda archivada
+>
+> **No se implementan variantes, marcas ni lotes.** El inventario sigue llevándose **por producto**, como está hoy.
+>
+> - **Marca descartada.** No se registra.
+> - **Valor monetario descartado.** Para un centro de acopio y donaciones no es algo que deba seguirse estrictamente, y era la única justificación del nivel de lote.
+> - Se conserva únicamente el tipo de producto y los grupos a los que pertenece.
+>
+> **Consecuencia que conviene tener presente:** sin lote no hay FEFO ni alertas de vencimiento por saldo. El vencimiento se sigue guardando en `donation_items.expiry_date`, así que el dato no se pierde, pero el inventario no sabe de fechas. Si algún día se necesita, este documento tiene el análisis hecho.
+>
+> Se conserva como referencia, no como plan.
+
+---
+
 Respuesta a las dos decisiones abiertas de [`PROPUESTA-CAPTURA.md`](https://github.com/fcenwebunal/akopia-frontend/blob/main/PROPUESTA-CAPTURA.md): granularidad del inventario y papel de la marca. Con la estrategia para que esa granularidad **no se pague en fricción de captura**, que es el riesgo real.
 
 ---

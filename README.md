@@ -304,6 +304,26 @@ Tres cosas que conviene entender de esta tabla:
 
 **Una regla de lista que no se cumple filtra, no rechaza.** Si un operador pide `GET /api/collections/audit_log/records`, recibe `200` con `totalItems: 0`, no un `403`. No hay fuga de datos, pero al probar reglas hay que mirar cuántos registros vuelven, no el código de estado.
 
+### `users` lleva además un `manageRule`
+
+Desde la migración `030`, `users` tiene `manageRule: "@request.auth.role = 'admin' && @request.auth.active = true"`, además de sus reglas normales.
+
+No es redundante con `updateRule`. Las colecciones de autenticación de PocketBase ocultan el correo de terceros (`emailVisibility`) y bloquean ciertos campos internos (como `verified`) a cualquiera que no sea el propio dueño del registro — **incluido un admin de la aplicación**, porque `role: admin` es un campo cualquiera de `users`, no una superpotencia real ante PocketBase. `manageRule` es el mecanismo que PocketBase ofrece exactamente para esto: un rol de la aplicación que administra la colección de autenticación por completo, sin ser un superusuario real.
+
+Se encontró probando `/panel/usuarios` en el frontend: el correo de las cuentas por activar aparecía en blanco para un admin hasta agregar esta regla.
+
+### El puente con Firebase Authentication
+
+`users` ganó un campo `firebase_uid` (migración `029`) para las cuentas que se registran a través de Firebase, en el repositorio del frontend (`/registro`, `/api/auth/firebase`). El backend no sabe nada de Firebase — solo recibe una llamada de un superusuario de servicio pidiendo crear o actualizar un registro de `users`, igual que si lo hiciera cualquier otro cliente con privilegios de superusuario.
+
+Ese superusuario **no es** ninguno de los que ya existían (ni `admin@akopia.org`, que es un registro de `users`, ni el superusuario personal del panel). Es uno nuevo, dedicado, que cada entorno crea con:
+
+```bash
+./pocketbase superuser upsert servicio@akopia.internal "una-clave-larga"
+```
+
+y cuyas credenciales viven solo en el servidor del frontend (`POCKETBASE_SERVICE_EMAIL` / `POCKETBASE_SERVICE_PASSWORD`), nunca en el navegador. El detalle completo de por qué hace falta un superusuario real —y no basta con `role: admin`— está en el `CLAUDE.md` de este repositorio.
+
 ### El flujo, y qué movimiento dispara cada paso
 
 | Acción del operador | Transición | Movimiento | Efecto en los saldos |
