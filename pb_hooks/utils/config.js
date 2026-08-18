@@ -79,8 +79,27 @@ var AUDIT_FIELDS = {
 
 var AUDITED_COLLECTIONS = Object.keys(AUDIT_FIELDS);
 
+// Campos que un operador NO puede tocar en `categories`/`products` —
+// usados por 06_catalog_photo_guard.pb.js. Cualquier campo fuera de
+// esta lista (hoy solo `photo_url`) queda libre para cualquier activo.
+var CATALOG_GUARDED_FIELDS = {
+  categories: ["name", "group_id", "description", "default_unit_id", "active"],
+  products: [
+    "name",
+    "category_id",
+    "default_unit_id",
+    "description",
+    "min_stock_alert",
+    "requires_expiry",
+    "requires_batch",
+    "requires_quarantine",
+    "active",
+  ],
+};
+
 module.exports = {
   CODE_PREFIXES: CODE_PREFIXES,
   AUDIT_FIELDS: AUDIT_FIELDS,
   AUDITED_COLLECTIONS: AUDITED_COLLECTIONS,
+  CATALOG_GUARDED_FIELDS: CATALOG_GUARDED_FIELDS,
 };
