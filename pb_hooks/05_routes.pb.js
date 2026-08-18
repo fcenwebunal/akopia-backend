@@ -333,6 +333,87 @@ routerAdd("GET", "/api/inventory/summary", (e) => {
   return e.json(200, { summary: summary, totals: totals });
 }, $apis.requireAuth());
 
+// ── GET /api/requests/missing-products ────────────────────────
+// Demanda sin cubrir: por cada producto, cuánto piden las solicitudes
+// que siguen sin decidirse (`pendiente`) frente a lo que hay disponible
+// en TODA la bodega — no solo en un renglón. Una vez que una solicitud
+// se aprueba, lo que necesitaba ya se reservó, así que deja de contar
+// como faltante.
+//
+// Sin datos de quién pide ni para qué: solo producto, categoría y
+// cuánto falta. Es deliberado — esta ruta es la que en algún momento
+// va a alimentar una vista pública (qué donar), y ese dato no debe
+// llevar nada del solicitante. Hoy exige sesión como el resto de la
+// API; abrirla al público es quitar `requireOperator` y el segundo
+// argumento de `routerAdd`, nada más — la forma de la respuesta ya es
+// segura de mostrar afuera.
+//
+// No reutiliza `findInventory` (que busca una ubicación a la vez, y a
+// la que `request_items` nunca le pasa una real: ese campo no existe en
+// su esquema) — aquí se suma `available_qty` de todas las ubicaciones
+// de cada producto, que es lo que corresponde para saber si alcanza.
+routerAdd("GET", "/api/requests/missing-products", (e) => {
+  const { requireOperator } = require(`${__hooks}/utils/routes.js`);
+
+  requireOperator(e);
+
+  const pendingItems = e.app.findRecordsByFilter(
+    "request_items",
+    "request_id.status = 'pendiente'",
+    "",
+    0,
+    0
+  );
+
+  if (pendingItems.length === 0) {
+    return e.json(200, { items: [] });
+  }
+
+  const requestedByProduct = {};
+  for (const item of pendingItems) {
+    const productId = item.get("product_id");
+    requestedByProduct[productId] =
+      (requestedByProduct[productId] || 0) + item.get("quantity_requested");
+  }
+
+  const availableByProduct = {};
+  const inventoryRows = e.app.findRecordsByFilter("inventory", "", "", 0, 0);
+  for (const row of inventoryRows) {
+    const productId = row.get("product_id");
+    availableByProduct[productId] =
+      (availableByProduct[productId] || 0) + (row.get("available_qty") || 0);
+  }
+
+  const items = [];
+  for (const productId in requestedByProduct) {
+    const requested = requestedByProduct[productId];
+    const available = availableByProduct[productId] || 0;
+    const missing = requested - available;
+
+    if (missing <= 0) {
+      continue;
+    }
+
+    const product = e.app.findRecordById("products", productId);
+    const category = e.app.findRecordById("categories", product.get("category_id"));
+    const unit = e.app.findRecordById("units", product.get("default_unit_id"));
+
+    items.push({
+      product_id: productId,
+      product_name: product.get("name"),
+      category_name: category.get("name"),
+      unit: unit.get("code") || unit.get("name"),
+      requested_qty: requested,
+      available_qty: available,
+      missing_qty: missing,
+    });
+  }
+
+  items.sort((a, b) => b.missing_qty - a.missing_qty);
+
+  return e.json(200, { items: items });
+}, $apis.requireAuth());
+
 // ── POST /api/dispatches/{id}/confirm-delivery ───────────────
 // Cierra el ciclo: registra la entrega y saca de bodega lo entregado.
 routerAdd("POST", "/api/dispatches/{id}/confirm-delivery", (e) => {
