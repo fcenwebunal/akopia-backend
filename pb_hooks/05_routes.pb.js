@@ -346,6 +346,7 @@ routerAdd("POST", "/api/dispatches/{id}/confirm-delivery", (e) => {
     receiver_name: "",
     receiver_phone: "",
     receiver_id_type: "",
+    receiver_id_number: "",
     delivery_date: "",
     status: "",
     notes: "",
@@ -380,6 +381,7 @@ routerAdd("POST", "/api/dispatches/{id}/confirm-delivery", (e) => {
     delivery.set("receiver_name", body.receiver_name);
     delivery.set("receiver_phone", body.receiver_phone);
     delivery.set("receiver_id_type", body.receiver_id_type);
+    delivery.set("receiver_id_number", body.receiver_id_number);
     delivery.set("delivery_date", body.delivery_date || new Date().toISOString());
     delivery.set("status", body.status);
     delivery.set("notes", body.notes);
