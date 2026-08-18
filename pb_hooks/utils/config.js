@@ -79,10 +79,12 @@ var AUDIT_FIELDS = {
 
 var AUDITED_COLLECTIONS = Object.keys(AUDIT_FIELDS);
 
-// Campos que un operador NO puede tocar en `categories`/`products` —
-// usados por 06_catalog_photo_guard.pb.js. Cualquier campo fuera de
-// esta lista (hoy solo `photo_url`) queda libre para cualquier activo.
+// Campos que un operador NO puede tocar en `groups`/`categories`/
+// `products` — usados por 06_catalog_photo_guard.pb.js. Cualquier
+// campo fuera de esta lista (hoy solo `photo_url`) queda libre para
+// cualquier activo.
 var CATALOG_GUARDED_FIELDS = {
+  groups: ["name", "description", "active"],
   categories: ["name", "group_id", "description", "default_unit_id", "active"],
   products: [
     "name",

@@ -1,12 +1,13 @@
 // ─────────────────────────────────────────────────────────────
 // 06_catalog_photo_guard.pb.js — Un operador solo edita la foto
 //
-// La migración 037 abrió `categories.updateRule` y `products.updateRule`
-// a cualquier activo, para que un operador pueda cambiar la foto sin
-// llamar a un admin. Pero la regla de una colección no distingue
-// "cambió photo_url" de "cambió el nombre" — por eso ese permiso viene
-// acompañado de este hook: si quien edita no es admin, cualquier campo
-// que no sea `photo_url` debe llegar exactamente igual a como estaba.
+// Las migraciones 037 y 038 abrieron `updateRule` de `categories`,
+// `products` y `groups` a cualquier activo, para que un operador pueda
+// cambiar la foto sin llamar a un admin. Pero la regla de una colección
+// no distingue "cambió photo_url" de "cambió el nombre" — por eso ese
+// permiso viene acompañado de este hook: si quien edita no es admin,
+// cualquier campo que no sea `photo_url` debe llegar exactamente igual
+// a como estaba.
 // ─────────────────────────────────────────────────────────────
 
 onRecordUpdateRequest((e) => {
@@ -31,4 +32,4 @@ onRecordUpdateRequest((e) => {
   }
 
   e.next();
-}, "categories", "products");
+}, "groups", "categories", "products");
