@@ -165,6 +165,7 @@ var MOVEMENT_EFFECTS = {
   traslado_a_cuarentena: { available: -1, quarantine: 1 },
   traslado_salida: { available: -1 },
   traslado_entrada: { available: 1 },
+  rechazo: { quarantine: -1 },
 };
 
 var BUCKET_LABELS = {
@@ -374,6 +375,39 @@ function relocateInventory(app, sourceInventory, destinationLocationId, quantity
   return destination;
 }
 
+// Da de baja cantidad retenida en cuarentena que no pasó la revisión.
+// A propósito no toca `donation_items`: igual que una reubicación, esto
+// corrige el saldo agregado de `inventory` sin reescribir de dónde vino
+// la donación ni su clasificación original — el mismo principio que ya
+// obliga a usar un ajuste en vez de reclasificar un artículo que ya
+// afectó inventario (ver 03_inventory.pb.js, transición bloqueada
+// "no se puede rechazar un artículo que ya afectó inventario").
+// Es una salida definitiva: resta de `quarantine_qty` y de `total_qty`,
+// sin sumar en ningún otro lado.
+function rejectQuarantine(app, inventory, quantity, operatorId, notes) {
+  if (quantity <= 0) {
+    throw new BadRequestError("La cantidad a rechazar debe ser mayor que cero");
+  }
+
+  if (inventory.get("quarantine_qty") < quantity) {
+    throw new BadRequestError(
+      "Cantidad en revisión insuficiente. En revisión: " + inventory.get("quarantine_qty")
+    );
+  }
+
+  const productId = inventory.get("product_id");
+  const locationId = inventory.get("location_id") || "";
+  const unitId = inventory.get("unit_id");
+
+  updateInventoryQuantities(app, inventory, "rechazo", quantity);
+  createInventoryMovement(
+    app, "rechazo", productId, locationId, unitId, quantity,
+    "manual", "", operatorId, notes || "Rechazado tras revisión"
+  );
+
+  return inventory;
+}
+
 // Todas las reservas activas de una solicitud, en cualquiera de sus renglones.
 function findActiveReservations(app, requestId) {
   return app.findRecordsByFilter(
@@ -391,6 +425,7 @@ module.exports = {
   closeReservation: closeReservation,
   applyReservationEffect: applyReservationEffect,
   relocateInventory: relocateInventory,
+  rejectQuarantine: rejectQuarantine,
   findActiveReservations: findActiveReservations,
   getOperatorId: getOperatorId,
   generateSequenceCode: generateSequenceCode,

@@ -569,3 +569,43 @@ routerAdd("POST", "/api/inventory/{id}/relocate", (e) => {
 
   return e.json(200, payload);
 }, $apis.requireAuth());
+
+// ── POST /api/inventory/{id}/reject ───────────────────────────
+// Da de baja cantidad en cuarentena que no pasó la revisión — salida
+// definitiva, no una reubicación. No cambia el `donation_item`
+// original (sigue contando de dónde vino y que pasó por cuarentena);
+// solo corrige el saldo agregado, igual que ya hace un ajuste con
+// `available_qty`.
+routerAdd("POST", "/api/inventory/{id}/reject", (e) => {
+  const { requireOperator } = require(`${__hooks}/utils/routes.js`);
+  const { rejectQuarantine } = require(`${__hooks}/utils/helpers.js`);
+
+  const inventoryId = e.request.pathValue("id");
+  const operator = requireOperator(e);
+
+  const body = new DynamicModel({
+    quantity: 0,
+    notes: "",
+  });
+  e.bindBody(body);
+
+  if (!(body.quantity > 0)) {
+    throw new BadRequestError("La cantidad a rechazar debe ser mayor que cero");
+  }
+
+  let payload = null;
+
+  e.app.runInTransaction((txApp) => {
+    const inventory = txApp.findRecordById("inventory", inventoryId);
+
+    rejectQuarantine(txApp, inventory, body.quantity, operator.id, body.notes);
+
+    payload = {
+      id: inventory.id,
+      quarantine_qty: inventory.get("quarantine_qty"),
+      total_qty: inventory.get("total_qty"),
+    };
+  });
+
+  return e.json(200, payload);
+}, $apis.requireAuth());
