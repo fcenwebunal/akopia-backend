@@ -20,7 +20,7 @@
 // Aprueba una solicitud y reserva el inventario de todos sus renglones.
 routerAdd("POST", "/api/requests/{id}/approve", (e) => {
   const { requireAdmin, loadRequest } = require(`${__hooks}/utils/routes.js`);
-  const { reserveInventory, findInventory } = require(`${__hooks}/utils/helpers.js`);
+  const { reserveInventory, findInventoryRows } = require(`${__hooks}/utils/helpers.js`);
 
   const requestId = e.request.pathValue("id");
   const operator = requireAdmin(e);
@@ -56,27 +56,43 @@ routerAdd("POST", "/api/requests/{id}/approve", (e) => {
   // PocketBase como errores de validación por campo, así que un objeto
   // propio se pierde por el camino. La comprobación se repite igualmente
   // dentro, al mover cada saldo.
+  //
+  // Un producto puede estar repartido en varias ubicaciones — reubicar
+  // stock (ver `/api/inventory/{id}/relocate`) es justo lo que lo separa
+  // así. Cubrir lo pedido puede necesitar más de una: se reparte tomando
+  // primero de la ubicación con más saldo, y cada una que aporte deja su
+  // propia reserva — `findActiveReservations`/`closeReservation` ya
+  // procesan todas las que haya por solicitud, así que no hace falta
+  // tocarlas para que esto funcione.
   const missing = [];
   const plan = [];
 
   for (const item of items) {
     const quantity = item.get("quantity_requested");
     const product = e.app.findRecordById("products", item.get("product_id"));
-    const inventory = findInventory(e.app, item.get("product_id"), item.get("location_id"));
-    const available = inventory ? inventory.get("available_qty") : 0;
+    const rows = findInventoryRows(e.app, item.get("product_id"));
 
-    if (available < quantity) {
+    let remaining = quantity;
+    const allocations = [];
+    for (const row of rows) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, row.get("available_qty"));
+      allocations.push({ inventoryId: row.id, quantity: take });
+      remaining -= take;
+    }
+
+    if (remaining > 0) {
       missing.push({
         request_item_id: item.id,
         product: product.get("name"),
         requested: quantity,
-        available: available,
-        shortage: quantity - available,
+        available: quantity - remaining,
+        shortage: remaining,
       });
       continue;
     }
 
-    plan.push({ item: item, inventory: inventory, quantity: quantity, product: product });
+    plan.push({ item: item, allocations: allocations, quantity: quantity, product: product });
   }
 
   if (missing.length > 0) {
@@ -93,27 +109,29 @@ routerAdd("POST", "/api/requests/{id}/approve", (e) => {
     const request = loadRequest(txApp, requestId, "pendiente");
     const reservations = [];
     for (const step of plan) {
-      // Se relee dentro de la transacción: el plan se armó fuera, y otro
-      // operador pudo mover el saldo entretanto. Si ya no alcanza,
-      // updateInventoryQuantities lanza y se revierte todo.
-      const inventory = txApp.findRecordById("inventory", step.inventory.id);
+      for (const allocation of step.allocations) {
+        // Se relee dentro de la transacción: el plan se armó fuera, y
+        // otro operador pudo mover el saldo entretanto. Si ya no
+        // alcanza, updateInventoryQuantities lanza y se revierte todo.
+        const inventory = txApp.findRecordById("inventory", allocation.inventoryId);
 
-      const reservation = reserveInventory(
-        txApp,
-        step.item.id,
-        inventory,
-        step.quantity,
-        operator.id
-      );
+        const reservation = reserveInventory(
+          txApp,
+          step.item.id,
+          inventory,
+          allocation.quantity,
+          operator.id
+        );
+
+        reservations.push({
+          id: reservation.id,
+          product: step.product.get("name"),
+          quantity: allocation.quantity,
+        });
+      }
 
       step.item.set("status", "reservado");
       txApp.save(step.item);
-
-      reservations.push({
-        id: reservation.id,
-        product: step.product.get("name"),
-        quantity: step.quantity,
-      });
     }
 
     request.set("status", "aprobada");
@@ -212,7 +230,7 @@ routerAdd("POST", "/api/requests/{id}/cancel", (e) => {
 // Qué se puede atender de la solicitud, antes de aprobarla.
 routerAdd("GET", "/api/requests/{id}/availability", (e) => {
   const { requireOperator, loadRequest } = require(`${__hooks}/utils/routes.js`);
-  const { findInventory } = require(`${__hooks}/utils/helpers.js`);
+  const { findInventoryRows } = require(`${__hooks}/utils/helpers.js`);
 
   const requestId = e.request.pathValue("id");
   requireOperator(e);
@@ -233,8 +251,8 @@ routerAdd("GET", "/api/requests/{id}/availability", (e) => {
 
   for (const item of items) {
     const product = e.app.findRecordById("products", item.get("product_id"));
-    const inventory = findInventory(e.app, item.get("product_id"), item.get("location_id"));
-    const available = inventory ? inventory.get("available_qty") : 0;
+    const rows = findInventoryRows(e.app, item.get("product_id"));
+    const available = rows.reduce((sum, row) => sum + row.get("available_qty"), 0);
     const requested = item.get("quantity_requested");
     const sufficient = available >= requested;
 

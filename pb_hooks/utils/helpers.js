@@ -73,6 +73,33 @@ function findInventory(app, productId, locationId) {
   }
 }
 
+// Todos los renglones de inventario de un producto con saldo
+// disponible, en TODAS sus ubicaciones — a diferencia de
+// `findInventory`, que busca en una ubicación a la vez y solo sirve
+// cuando quien pregunta de verdad conoce esa ubicación (como
+// `donation_items`, que sí guarda `location_id`).
+//
+// `request_items` no guarda ubicación — nunca la tuvo, y no tiene por
+// qué: una solicitud pide un producto, no un estante — así que
+// preguntar "cuánto hay disponible de este producto" solo tiene
+// sentido sumando todas sus ubicaciones. Usado por `approve` y
+// `availability` para no repetir el error de mirar una sola.
+//
+// Orden descendente por saldo: al repartir una reserva entre varias
+// ubicaciones, empezar por la que más tiene deja menos renglones
+// tocados por reserva, sin que importe cuál en particular — no hay
+// FEFO que respetar (el proyecto no lleva lotes).
+function findInventoryRows(app, productId) {
+  return app.findRecordsByFilter(
+    "inventory",
+    "product_id = {:productId} && available_qty > 0",
+    "-available_qty",
+    0,
+    0,
+    { productId: productId }
+  );
+}
+
 function findOrCreateInventory(app, productId, locationId, unitId) {
   var existing = findInventory(app, productId, locationId);
   if (existing) {
@@ -368,6 +395,7 @@ module.exports = {
   getOperatorId: getOperatorId,
   generateSequenceCode: generateSequenceCode,
   findInventory: findInventory,
+  findInventoryRows: findInventoryRows,
   findOrCreateInventory: findOrCreateInventory,
   createInventoryMovement: createInventoryMovement,
   updateInventoryQuantities: updateInventoryQuantities,
