@@ -185,3 +185,7 @@ Instrucción recibida: conectar el registro/login con Firebase Authentication, d
 - Creado un tercer superusuario, **`servicio@akopia.internal`**, dedicado exclusivamente a esto. Cada entorno debe crear el suyo con `./pocketbase superuser upsert`; sus credenciales viven solo en el servidor del frontend.
 - **`active` se re-evalúa en cada petición, no queda embebido en el token.** Verificado: un usuario recién activado por el admin pudo leer datos inmediatamente con el token que ya tenía, sin volver a autenticarse. Confirma que el invariante de `active = true` en cada regla de acceso (migración `026`) sigue siendo la única puerta, también para las cuentas de Firebase.
 - Todo verificado contra Firebase real (proyecto `akopia`, API pública, sin mocks): alta de un operador nuevo (`active: false`), y `admin@akopia.org` registrándose por primera vez en Firebase y enlazándose a su registro existente sin perder el rol.
+
+### 2026-08-18 (noche) — Fotos de catálogo para el explorador estilo menú
+
+Migración `031`: `photo_url` (`URLField`, opcional) en `groups`, `categories` y `products`. Solo la URL — el archivo real lo aloja Cloudinary, no PocketBase. Sin foto, el frontend muestra una inicial de color; no es un campo obligatorio ni bloquea nada.
