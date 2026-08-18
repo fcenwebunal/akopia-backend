@@ -136,6 +136,8 @@ var MOVEMENT_EFFECTS = {
   cuarentena: { quarantine: 1 },
   liberar_cuarentena: { available: 1, quarantine: -1 },
   traslado_a_cuarentena: { available: -1, quarantine: 1 },
+  traslado_salida: { available: -1 },
+  traslado_entrada: { available: 1 },
 };
 
 var BUCKET_LABELS = {
@@ -299,6 +301,52 @@ function applyReservationEffect(app, inventory, movementType, quantity, requestI
   );
 }
 
+// Mueve cantidad disponible de un renglón de inventario a otro (mismo
+// producto, ubicación distinta) — o le asigna ubicación por primera vez
+// a lo que estaba "sin ubicar". Solo toca `available_qty`: lo reservado
+// ya está comprometido con una solicitud y lo que está en cuarentena
+// espera revisión, ninguno de los dos se reubica de paso.
+//
+// Dos movimientos, no uno: `traslado_salida` en el origen y
+// `traslado_entrada` en el destino, igual que reserva/liberación ya
+// hacen con dos tipos en vez de uno solo con dos ubicaciones.
+function relocateInventory(app, sourceInventory, destinationLocationId, quantity, operatorId, notes) {
+  const sourceLocationId = sourceInventory.get("location_id") || "";
+  const destLocationId = destinationLocationId || "";
+
+  if (sourceLocationId === destLocationId) {
+    throw new BadRequestError("La ubicación de destino debe ser distinta de la actual");
+  }
+
+  if (quantity <= 0) {
+    throw new BadRequestError("La cantidad a reubicar debe ser mayor que cero");
+  }
+
+  if (sourceInventory.get("available_qty") < quantity) {
+    throw new BadRequestError(
+      "Cantidad disponible insuficiente. Disponible: " + sourceInventory.get("available_qty")
+    );
+  }
+
+  const productId = sourceInventory.get("product_id");
+  const unitId = sourceInventory.get("unit_id");
+
+  updateInventoryQuantities(app, sourceInventory, "traslado_salida", quantity);
+  createInventoryMovement(
+    app, "traslado_salida", productId, sourceLocationId, unitId, quantity,
+    "manual", "", operatorId, notes || "Traslado de ubicación"
+  );
+
+  const destination = findOrCreateInventory(app, productId, destLocationId, unitId);
+  updateInventoryQuantities(app, destination, "traslado_entrada", quantity);
+  createInventoryMovement(
+    app, "traslado_entrada", productId, destLocationId, unitId, quantity,
+    "manual", "", operatorId, notes || "Traslado de ubicación"
+  );
+
+  return destination;
+}
+
 // Todas las reservas activas de una solicitud, en cualquiera de sus renglones.
 function findActiveReservations(app, requestId) {
   return app.findRecordsByFilter(
@@ -315,6 +363,7 @@ module.exports = {
   reserveInventory: reserveInventory,
   closeReservation: closeReservation,
   applyReservationEffect: applyReservationEffect,
+  relocateInventory: relocateInventory,
   findActiveReservations: findActiveReservations,
   getOperatorId: getOperatorId,
   generateSequenceCode: generateSequenceCode,

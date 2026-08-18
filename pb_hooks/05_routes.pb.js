@@ -425,3 +425,48 @@ routerAdd("POST", "/api/dispatches/{id}/confirm-delivery", (e) => {
 
   return e.json(200, payload);
 }, $apis.requireAuth());
+
+// ── POST /api/inventory/{id}/relocate ─────────────────────────
+// Mueve cantidad disponible del renglón de inventario {id} a otra
+// ubicación (o se la asigna por primera vez si estaba sin ubicar).
+// No cambia el `donation_item` original: ese sigue contando de dónde
+// vino la mercancía, esto solo mueve dónde está guardada ahora.
+routerAdd("POST", "/api/inventory/{id}/relocate", (e) => {
+  const { requireOperator } = require(`${__hooks}/utils/routes.js`);
+  const { relocateInventory } = require(`${__hooks}/utils/helpers.js`);
+
+  const inventoryId = e.request.pathValue("id");
+  const operator = requireOperator(e);
+
+  const body = new DynamicModel({
+    location_id: "",
+    quantity: 0,
+    notes: "",
+  });
+  e.bindBody(body);
+
+  if (!(body.quantity > 0)) {
+    throw new BadRequestError("La cantidad a reubicar debe ser mayor que cero");
+  }
+
+  let payload = null;
+
+  e.app.runInTransaction((txApp) => {
+    const source = txApp.findRecordById("inventory", inventoryId);
+
+    const destination = relocateInventory(
+      txApp, source, body.location_id, body.quantity, operator.id, body.notes
+    );
+
+    payload = {
+      source: { id: source.id, available_qty: source.get("available_qty") },
+      destination: {
+        id: destination.id,
+        location_id: destination.get("location_id"),
+        available_qty: destination.get("available_qty"),
+      },
+    };
+  });
+
+  return e.json(200, payload);
+}, $apis.requireAuth());
