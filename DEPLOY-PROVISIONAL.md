@@ -109,6 +109,8 @@ Dale a **Deploy**. Vercel construye y publica en un dominio `<proyecto>.vercel.a
 
 Solo si vas a usar "Continuar con Google" (el login con correo y contraseña no lo necesita): en la [consola de Firebase](https://console.firebase.google.com) → Authentication → Settings → **Authorized domains**, agrega el dominio de Vercel (`<proyecto>.vercel.app`). Sin esto, Google Sign-In falla con `auth/unauthorized-domain` desde ese dominio — mismo síntoma ya documentado para una IP de red local, causa distinta.
 
+> ⚠️ **Confirma que estás en el proyecto de Firebase correcto antes de tocar nada.** El selector de proyecto, arriba a la izquierda de la consola, puede tener más de uno parecido (en esta cuenta, además de `akopia` — el que de verdad usa la app, según `NEXT_PUBLIC_FIREBASE_PROJECT_ID` — también existe `fcenedit`/FCEN). Agregar el dominio en el proyecto equivocado se ve exactamente igual de "agregado" en la lista, pero no tiene ningún efecto — y el error en el navegador (`auth/unauthorized-domain`, o el genérico "Ocurrió un error inesperado") no distingue entre "no lo agregaste" y "lo agregaste en el proyecto que no es". Pasó de verdad en un despliegue real.
+
 ### 2. Probar el ciclo completo en producción real
 
 Login, panel, una donación de prueba, clasificar, ver el inventario moverse — el mismo criterio de "funcionando" que ya define este proyecto. No asumas que porque compiló ya sirve.
