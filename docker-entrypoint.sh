@@ -15,14 +15,25 @@
 #    así que cae al 8090 fijo de fly.toml).
 set -e
 
+# OJO: estos dos bloques NO deben poder tumbar el arranque. Un `upsert`
+# puede fallar por algo tan simple como una contraseña de menos de 8
+# caracteres (el mínimo que exige PocketBase) — sin el `|| echo ...`,
+# `set -e` corta el script ahí mismo y `serve` nunca llega a correr: el
+# contenedor queda "arriba" para el hosting (el proceso de arranque
+# técnicamente terminó) pero sin nada escuchando, así que cualquier
+# petición da 502 sin ninguna pista de la causa real. Encontrado en un
+# despliegue real, no anticipado al escribir esto la primera vez.
 if [ -n "$SERVICE_SUPERUSER_EMAIL" ] && [ -n "$SERVICE_SUPERUSER_PASSWORD" ]; then
   echo "Asegurando el superusuario de servicio ($SERVICE_SUPERUSER_EMAIL)..."
-  /pb/pocketbase superuser upsert "$SERVICE_SUPERUSER_EMAIL" "$SERVICE_SUPERUSER_PASSWORD"
+  /pb/pocketbase superuser upsert "$SERVICE_SUPERUSER_EMAIL" "$SERVICE_SUPERUSER_PASSWORD" \
+    || echo "AVISO: no se pudo crear/actualizar el superusuario de servicio (revisa que la contraseña tenga al menos 8 caracteres). Sigo arrancando igual."
 fi
 
 if [ -n "$PERSONAL_SUPERUSER_EMAIL" ] && [ -n "$PERSONAL_SUPERUSER_PASSWORD" ]; then
   echo "Asegurando el superusuario personal ($PERSONAL_SUPERUSER_EMAIL)..."
-  /pb/pocketbase superuser upsert "$PERSONAL_SUPERUSER_EMAIL" "$PERSONAL_SUPERUSER_PASSWORD"
+  /pb/pocketbase superuser upsert "$PERSONAL_SUPERUSER_EMAIL" "$PERSONAL_SUPERUSER_PASSWORD" \
+    || echo "AVISO: no se pudo crear/actualizar el superusuario personal (revisa que la contraseña tenga al menos 8 caracteres). Sigo arrancando igual."
 fi
 
+echo "Arrancando PocketBase en el puerto ${PORT:-8090}..."
 exec /pb/pocketbase serve --http="0.0.0.0:${PORT:-8090}"
