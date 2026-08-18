@@ -1,126 +1,65 @@
-# Despliegue provisional — Fly.io + Vercel
+# Despliegue provisional — Railway + Vercel
 
 **Por qué existe este documento:** OTIC (Carlos) no ha respondido con el acceso al servidor de la UNAL, y el aplicativo tiene que estar en producción recolectando datos. Decisión de Juan Manuel (18 ago 2026): desplegar de forma **provisional** en hosting público, y migrar a `172.23.177.12` (`DESPLIEGUE.md`) en cuanto haya VPN. Nada de lo que sigue es definitivo — es para hoy.
 
+**Por qué Railway y no Fly.io:** se intentó primero con Fly.io (queda documentado como alternativa al final, por si algún día una tarjeta sí pasa su verificación) — la tarjeta de Juan Manuel, incluida una virtual nueva, fue rechazada dos veces en la verificación de Fly. Railway no pidió tarjeta para el plan de prueba de 30 días que Juan Manuel ya tenía activo, así que es el camino que de verdad se pudo recorrer hoy.
+
 |                                |                                                                   |
 | ------------------------------ | ----------------------------------------------------------------- |
-| **Backend** (PocketBase) | Fly.io — proceso y disco persistentes, algo que Vercel no ofrece |
+| **Backend** (PocketBase) | Railway — proceso y disco persistentes, algo que Vercel no ofrece |
 | **Frontend** (Next.js)   | Vercel                                                            |
 
-Los archivos que hacen falta ya están en este repositorio: [`Dockerfile`](Dockerfile), [`.dockerignore`](.dockerignore), [`fly.toml`](fly.toml).
+Los archivos que hacen falta ya están en este repositorio: [`Dockerfile`](Dockerfile), [`docker-entrypoint.sh`](docker-entrypoint.sh), [`.dockerignore`](.dockerignore), [`railway.toml`](railway.toml).
+
+**El mismo `Dockerfile` sirve para los dos hostings** — no hace falta nada específico de Railway más allá de `railway.toml` (opcional, solo mejora cómo Railway detecta que el despliegue quedó listo). `docker-entrypoint.sh` es lo que hace posible saltarse la consola/shell del hosting por completo: si le pasas las variables correctas, crea los superusuarios de PocketBase que hacen falta apenas arranca el contenedor, cada vez — no hay que entrar a ningún lado a teclear un comando.
 
 ---
 
-## Parte 1 — Backend en Fly.io
+## Parte 1 — Backend en Railway
 
-### 1. Instalar `flyctl`
+### 1. Entra a [railway.app](https://railway.app) e inicia sesión
 
-PowerShell:
+Con la cuenta donde ya tienes el plan de prueba activo. GitHub como método de inicio de sesión es lo más simple: además de crear la cuenta, deja lista la conexión que hace falta para el paso siguiente.
 
-```powershell
-pwsh -Command "iwr https://fly.io/install.ps1 -useb | iex"
-```
+### 2. Crear el proyecto desde este repositorio
 
-Si no tienes `pwsh` (PowerShell 7), el mismo comando funciona igual en Windows PowerShell 5.1 quitando el `pwsh -Command`:
+**New Project → Deploy from GitHub repo** → busca y selecciona `fcenwebunal/akopia-backend`. Si es la primera vez, Railway va a pedir autorizar su GitHub App — puedes darle acceso solo a este repositorio, no hace falta autorizar toda la cuenta.
 
-```powershell
-iwr https://fly.io/install.ps1 -useb | iex
-```
+Railway detecta el `Dockerfile` solo y arranca el build. Puede tardar uno o dos minutos la primera vez (descarga el binario de PocketBase dentro del build, igual que en la prueba local).
 
-Cierra y vuelve a abrir la terminal para que el `PATH` nuevo quede activo.
+### 3. Variables de entorno
 
-> ⚠️ **El comando se llama `flyctl`, no `fly`.** El instalador deja el binario como `flyctl.exe` en `%USERPROFILE%\.fly\bin` — sin ningún `fly.exe` al lado, aunque la documentación de Fly hable de "el comando fly" en prosa. Si escribes `fly auth signup` te va a dar "no se reconoce como cmdlet", incluso con el `PATH` bien puesto. Todos los comandos de esta guía usan `flyctl` a propósito, por esto mismo — confirmado en una instalación real, no asumido.
+En el servicio recién creado → pestaña **Variables** → agrega:
 
-Si después de abrir una ventana nueva `flyctl` sigue sin reconocerse, comprueba con:
+| Variable | Valor |
+|---|---|
+| `AKOPIA_INITIAL_ADMIN_PASSWORD` | la misma que tienes en `akopia-backend/.env` local, o una nueva |
+| `SERVICE_SUPERUSER_EMAIL` | `admin@akopia.org` |
+| `SERVICE_SUPERUSER_PASSWORD` | la misma que tienes guardada como `POCKETBASE_SERVICE_PASSWORD` en `akopia-frontend/.env.local` — **tiene que coincidir exactamente**, o el puente de Firebase del frontend responde con un 500 genérico sin pista de la causa |
+| `PERSONAL_SUPERUSER_EMAIL` *(opcional)* | tu correo, para poder entrar a `/_/` |
+| `PERSONAL_SUPERUSER_PASSWORD` *(opcional)* | una contraseña tuya, distinta de la de servicio |
 
-```powershell
-Get-Command flyctl
-```
+`docker-entrypoint.sh` crea esos superusuarios solo, cada vez que el contenedor arranca — no hace falta abrir ninguna consola.
 
-Si tampoco lo encuentra ahí, es que la ventana en la que probaste no heredó el `PATH` actualizado (pasa seguido con la terminal integrada de un editor que ya estaba abierto antes de instalar) — cierra **el programa entero** (no solo la pestaña de la terminal) y ábrelo de nuevo, o usa una ventana de PowerShell abierta directo desde el menú de inicio. Como último recurso, siempre puedes llamarlo por su ruta completa sin depender del `PATH`: `& "$env:USERPROFILE\.fly\bin\flyctl.exe" auth signup`.
+### 4. Volumen persistente
 
-### 2. Crear cuenta e iniciar sesión
+**Settings → Volumes → New Volume**. Ruta de montaje: `/pb/pb_data`. Sin esto, cada redeploy borra la base — Railway reconstruye el contenedor desde cero en cada uno, y solo lo que está en un volumen sobrevive.
 
-```powershell
-flyctl auth signup
-```
+### 5. Dominio público
 
-(o `flyctl auth login` si ya tienes cuenta). Fly pide una tarjeta al activar la cuenta, incluso para el uso gratuito — es su verificación anti-abuso. Una máquina pequeña como esta debería mantenerse dentro del uso gratuito, pero confírmalo en su panel de facturación una vez dentro; los precios no los fija este documento.
+**Settings → Networking → Generate Domain**. Da un dominio `https://<algo>.up.railway.app`, con HTTPS ya resuelto — nada que configurar.
 
-### 3. Lanzar la app (sin desplegar todavía)
+### 6. Redeploy y verificar
 
-Desde `akopia-backend/`:
+Si agregaste el volumen o las variables después del primer build, Railway normalmente redespliega solo; si no, **Deployments → ⋮ → Redeploy** en el último. Luego:
 
 ```powershell
-flyctl launch --no-deploy
+curl https://<tu-dominio>.up.railway.app/api/health
 ```
 
-Va a preguntar:
+Debe responder `{"message":"API is healthy."...}`. Revisa también los **Logs** del servicio: deberías ver las dos líneas de `docker-entrypoint.sh` confirmando los superusuarios (`Successfully saved superuser "..."`) antes de la línea de `Server started`.
 
-- **Nombre de la app** — el que quieras (queda en `<nombre>.fly.dev`). Si `akopia-backend` ya está tomado por otra cuenta, prueba `akopia-backend-unal`.
-- **Región** — `bog` (Bogotá) si aparece disponible; si no, `mia` (Miami) es la alternativa más cercana.
-- **¿Postgres/Redis?** — No a ambas. Ya tenemos SQLite propio.
-- Detecta el `Dockerfile` solo.
-
-Esto reescribe `fly.toml` con el nombre y región reales. Revisa que conserve: un volumen montado en `/pb/pb_data`, `min_machines_running = 1`, y **una sola máquina** (nunca actives autoescalado horizontal — SQLite no admite dos procesos escribiendo el mismo archivo).
-
-### 4. Crear el volumen persistente
-
-```powershell
-flyctl volumes create akopia_data --region bog --size 1
-```
-
-(`--region` con la misma que confirmaste en el paso 3; `--size 1` es 1 GB, de sobra para empezar — se amplía después con `flyctl volumes extend` si hace falta, sin perder datos).
-
-### 5. Configurar la contraseña del admin inicial
-
-Es la misma variable que ya conoces de `.env` local — sin ella, la migración `023` bloquea el arranque a propósito:
-
-```powershell
-flyctl secrets set AKOPIA_INITIAL_ADMIN_PASSWORD="la-misma-que-tienes-en-tu-.env-local-o-una-nueva"
-```
-
-### 6. Desplegar
-
-```powershell
-flyctl deploy
-```
-
-### 7. Verificar
-
-```powershell
-flyctl status
-```
-
-Y en el navegador: `https://<tu-app>.fly.dev/api/health` debe responder `{"message":"API is healthy."...}`.
-
-### 8. Crear el superusuario de servicio (para el puente de Firebase del frontend)
-
-El frontend necesita un superusuario real de PocketBase para `/api/auth/firebase` — el mismo mecanismo que ya usas en local, reutilizando el correo `admin@akopia.org` (ver el `CLAUDE.md` del frontend, entrada del 18 de agosto sobre esta desviación deliberada).
-
-```powershell
-flyctl ssh console
-```
-
-Ya dentro del contenedor:
-
-```sh
-/pb/pocketbase superuser upsert admin@akopia.org
-```
-
-Te va a pedir la contraseña por stdin — usa **exactamente** la misma que tienes guardada como `POCKETBASE_SERVICE_PASSWORD` en el `.env.local` del frontend. Si no coinciden, el puente de Firebase responde con un 500 genérico sin pista de la causa (ya documentado como riesgo conocido).
-
-### 9. (Recomendado) Tu propio superusuario para entrar a `/_/`
-
-Mismo comando del paso 8, con tu correo y una contraseña tuya, distinta de la de servicio:
-
-```sh
-/pb/pocketbase superuser upsert tu-correo@ejemplo.com
-```
-
-`exit` para salir del contenedor.
-
-> ⚠️ **A diferencia del plan para el VPS de la UNAL** (`DESPLIEGUE.md`, donde `/_/` se pensaba restringir por IP o túnel SSH), en este despliegue provisional `/_/` queda alcanzable desde cualquier lugar de internet — Fly no tiene, out of the box, el equivalente a "solo dentro de la red del campus". Usa una contraseña fuerte para tu superusuario personal. Cuando se migre al servidor definitivo, se retoma la restricción real.
+> ⚠️ **A diferencia del plan para el VPS de la UNAL** (`DESPLIEGUE.md`, donde `/_/` se pensaba restringir por IP o túnel SSH), en este despliegue provisional `/_/` queda alcanzable desde cualquier lugar de internet. Usa una contraseña fuerte para tu superusuario personal. Cuando se migre al servidor definitivo, se retoma la restricción real.
 
 ---
 
@@ -139,20 +78,20 @@ Con GitHub es lo más simple — el repo `fcenwebunal/akopia-frontend` es públi
 Antes de darle a Deploy (o después, en **Settings → Environment Variables** — cualquiera de los dos momentos sirve, pero sin esto el build no funciona de verdad):
 
 | Variable                                     | Valor                                                               |
-| -------------------------------------------- | ------------------------------------------------------------------- |
-| `NEXT_PUBLIC_PB_URL`                       | `https://<tu-app>.fly.dev` (la de la Parte 1, sin `/` al final) |
-| `NEXT_PUBLIC_FIREBASE_API_KEY`             | igual que en tu`.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`         | igual que en tu`.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`          | igual que en tu`.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | igual que en tu`.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | igual que en tu`.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_APP_ID`              | igual que en tu`.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`      | igual que en tu`.env.local`                                       |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| `NEXT_PUBLIC_PB_URL`                       | `https://<tu-dominio>.up.railway.app` (la de la Parte 1, sin `/` al final) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`             | igual que en tu `.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`         | igual que en tu `.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`          | igual que en tu `.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | igual que en tu `.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | igual que en tu `.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_APP_ID`              | igual que en tu `.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`      | igual que en tu `.env.local`                                       |
 | `POCKETBASE_SERVICE_EMAIL`                 | `admin@akopia.org`                                                |
-| `POCKETBASE_SERVICE_PASSWORD`              | la misma que usaste en el paso 8 de la Parte 1                      |
-| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`        | igual que en tu`.env.local`                                       |
-| `CLOUDINARY_API_KEY`                       | igual que en tu`.env.local`                                       |
-| `CLOUDINARY_API_SECRET`                    | igual que en tu`.env.local`                                       |
+| `POCKETBASE_SERVICE_PASSWORD`              | la misma que pusiste en `SERVICE_SUPERUSER_PASSWORD` en la Parte 1  |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`        | igual que en tu `.env.local`                                       |
+| `CLOUDINARY_API_KEY`                       | igual que en tu `.env.local`                                       |
+| `CLOUDINARY_API_SECRET`                    | igual que en tu `.env.local`                                       |
 
 Todos los valores ya los tienes en `akopia-frontend/.env.local` (nunca se commitea, pero está en tu máquina) — es copiar y pegar cada uno.
 
@@ -181,3 +120,23 @@ En cuanto quede en pie, entra a `/panel/respaldos` y crea el primero — es el p
 ## Parte 4 — Cuando llegue el acceso a la UNAL
 
 La migración sigue el mismo camino que ya documenta `DESPLIEGUE.md`: un respaldo de PocketBase (`Settings → Backups` en `/_/`, o `/panel/respaldos` en la app) es portable a cualquier instancia nueva, sin importar en qué hosting vivió mientras tanto.
+
+---
+
+## Alternativa — Fly.io (si consigues una tarjeta que sí pase)
+
+El mismo `Dockerfile` funciona sin cambios; solo hace falta `fly.toml`, ya en este repositorio.
+
+1. Instalar `flyctl` (⚠️ el comando se llama `flyctl`, no `fly` — el instalador no deja ningún `fly.exe`, confirmado en una instalación real):
+   ```powershell
+   iwr https://fly.io/install.ps1 -useb | iex
+   ```
+   Cierra y abre una terminal nueva para que el `PATH` quede activo.
+2. `flyctl auth signup` (pide tarjeta, aunque el uso se quede en el nivel gratuito — es su verificación anti-abuso).
+3. Desde `akopia-backend/`: `flyctl launch --no-deploy` — nombre de app, región `bog` (Bogotá) o `mia` (Miami) si `bog` no aparece, sin Postgres/Redis.
+4. `flyctl volumes create akopia_data --region bog --size 1`
+5. `flyctl secrets set AKOPIA_INITIAL_ADMIN_PASSWORD="..." SERVICE_SUPERUSER_EMAIL="admin@akopia.org" SERVICE_SUPERUSER_PASSWORD="..." PERSONAL_SUPERUSER_EMAIL="tu-correo" PERSONAL_SUPERUSER_PASSWORD="..."` — con `docker-entrypoint.sh` ya no hace falta `flyctl ssh console` para crear los superusuarios: se crean solos al arrancar, igual que en Railway.
+6. `flyctl deploy`
+7. Verificar: `flyctl status`, y `https://<tu-app>.fly.dev/api/health` en el navegador.
+
+El resto (Parte 2, 3 y 4 de arriba) es idéntico, cambiando la URL de `NEXT_PUBLIC_PB_URL` por la de `.fly.dev`.

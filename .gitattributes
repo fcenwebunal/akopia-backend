@@ -1,0 +1,5 @@
+# Scripts que corren dentro de un contenedor Linux: siempre LF, sin
+# importar el autocrlf de quien los edite en Windows. Un CRLF cuela el
+# shebang (`/bin/sh^M`) y el contenedor no arranca — nada silencioso,
+# pero el mensaje de error no dice "son los saltos de línea".
+*.sh text eol=lf

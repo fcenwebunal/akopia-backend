@@ -1,0 +1,14 @@
+# Config de Railway — opcional, pero le dice a Railway cuándo el
+# despliegue ya está listo de verdad (en vez de solo "el contenedor
+# arrancó") y a reiniciar solo si el proceso muere, no en cualquier otro
+# caso. El resto (Dockerfile, puerto vía $PORT) Railway lo detecta solo.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
