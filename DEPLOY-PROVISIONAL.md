@@ -4,10 +4,10 @@
 
 **Por qué Railway y no Fly.io:** se intentó primero con Fly.io (queda documentado como alternativa al final, por si algún día una tarjeta sí pasa su verificación) — la tarjeta de Juan Manuel, incluida una virtual nueva, fue rechazada dos veces en la verificación de Fly. Railway no pidió tarjeta para el plan de prueba de 30 días que Juan Manuel ya tenía activo, así que es el camino que de verdad se pudo recorrer hoy.
 
-|                                |                                                                   |
-| ------------------------------ | ----------------------------------------------------------------- |
+|                                |                                                                    |
+| ------------------------------ | ------------------------------------------------------------------ |
 | **Backend** (PocketBase) | Railway — proceso y disco persistentes, algo que Vercel no ofrece |
-| **Frontend** (Next.js)   | Vercel                                                            |
+| **Frontend** (Next.js)   | Vercel                                                             |
 
 Los archivos que hacen falta ya están en este repositorio: [`Dockerfile`](Dockerfile), [`docker-entrypoint.sh`](docker-entrypoint.sh), [`.dockerignore`](.dockerignore), [`railway.toml`](railway.toml).
 
@@ -31,13 +31,13 @@ Railway detecta el `Dockerfile` solo y arranca el build. Puede tardar uno o dos 
 
 En el servicio recién creado → pestaña **Variables** → agrega:
 
-| Variable | Valor |
-|---|---|
-| `AKOPIA_INITIAL_ADMIN_PASSWORD` | la misma que tienes en `akopia-backend/.env` local, o una nueva |
-| `SERVICE_SUPERUSER_EMAIL` | `admin@akopia.org` |
-| `SERVICE_SUPERUSER_PASSWORD` | la misma que tienes guardada como `POCKETBASE_SERVICE_PASSWORD` en `akopia-frontend/.env.local` — **tiene que coincidir exactamente**, o el puente de Firebase del frontend responde con un 500 genérico sin pista de la causa |
-| `PERSONAL_SUPERUSER_EMAIL` *(opcional)* | tu correo, para poder entrar a `/_/` |
-| `PERSONAL_SUPERUSER_PASSWORD` *(opcional)* | una contraseña tuya, distinta de la de servicio |
+| Variable                                       | Valor                                                                                                                                                                                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AKOPIA_INITIAL_ADMIN_PASSWORD`              | la misma que tienes en`akopia-backend/.env` local, o una nueva                                                                                                                                                                          |
+| `SERVICE_SUPERUSER_EMAIL`                    | `admin@akopia.org`                                                                                                                                                                                                                      |
+| `SERVICE_SUPERUSER_PASSWORD`                 | la misma que tienes guardada como`POCKETBASE_SERVICE_PASSWORD` en `akopia-frontend/.env.local` — **tiene que coincidir exactamente**, o el puente de Firebase del frontend responde con un 500 genérico sin pista de la causa |
+| `PERSONAL_SUPERUSER_EMAIL` *(opcional)*    | tu correo, para poder entrar a`/_/`                                                                                                                                                                                                     |
+| `PERSONAL_SUPERUSER_PASSWORD` *(opcional)* | una contraseña tuya, distinta de la de servicio                                                                                                                                                                                          |
 
 `docker-entrypoint.sh` crea esos superusuarios solo, cada vez que el contenedor arranca — no hace falta abrir ninguna consola.
 
@@ -49,6 +49,8 @@ En el servicio recién creado → pestaña **Variables** → agrega:
 
 **Settings → Networking → Generate Domain**. Da un dominio `https://<algo>.up.railway.app`, con HTTPS ya resuelto — nada que configurar.
 
+> ⚠️ **Revisa el puerto del dominio.** Railway suele mostrar el dominio junto a un puerto (por ejemplo "Port 8090", tomado de `EXPOSE 8090` en el `Dockerfile`), pero el puerto donde el contenedor *de verdad* escucha depende de la variable `$PORT` que Railway inyecta — en una prueba real resultó ser 8080, no 8090, y el desajuste dio 502 "Application failed to respond" sin explicar por qué. Confirma el puerto real en **Deploy Logs** (busca la línea `Server started at http://0.0.0.0:PUERTO`) y, si no coincide con el que aparece junto al dominio, edítalo ahí con el ícono de lápiz.
+
 ### 6. Redeploy y verificar
 
 Si agregaste el volumen o las variables después del primer build, Railway normalmente redespliega solo; si no, **Deployments → ⋮ → Redeploy** en el último. Luego:
@@ -57,7 +59,7 @@ Si agregaste el volumen o las variables después del primer build, Railway norma
 curl https://<tu-dominio>.up.railway.app/api/health
 ```
 
-Debe responder `{"message":"API is healthy."...}`. Revisa también los **Logs** del servicio: deberías ver las dos líneas de `docker-entrypoint.sh` confirmando los superusuarios (`Successfully saved superuser "..."`) antes de la línea de `Server started`.
+Debe responder `{"message":"API is healthy."...}`. Si en cambio da `502 Application failed to respond`, ve primero al aviso del paso 5 (el puerto). Si el puerto ya coincide y sigue el 502, revisa los **Deploy Logs**: deberías ver las líneas de `docker-entrypoint.sh` confirmando los superusuarios (`Successfully saved superuser "..."`, o un `AVISO:` si la contraseña tiene menos de 8 caracteres) antes de la línea de `Server started` — si el log se corta antes de esa línea, algo distinto está fallando y hace falta leer el mensaje de error específico.
 
 > ⚠️ **A diferencia del plan para el VPS de la UNAL** (`DESPLIEGUE.md`, donde `/_/` se pensaba restringir por IP o túnel SSH), en este despliegue provisional `/_/` queda alcanzable desde cualquier lugar de internet. Usa una contraseña fuerte para tu superusuario personal. Cuando se migre al servidor definitivo, se retoma la restricción real.
 
@@ -77,21 +79,21 @@ Con GitHub es lo más simple — el repo `fcenwebunal/akopia-frontend` es públi
 
 Antes de darle a Deploy (o después, en **Settings → Environment Variables** — cualquiera de los dos momentos sirve, pero sin esto el build no funciona de verdad):
 
-| Variable                                     | Valor                                                               |
-| --------------------------------------------- | ------------------------------------------------------------------- |
-| `NEXT_PUBLIC_PB_URL`                       | `https://<tu-dominio>.up.railway.app` (la de la Parte 1, sin `/` al final) |
-| `NEXT_PUBLIC_FIREBASE_API_KEY`             | igual que en tu `.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`         | igual que en tu `.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`          | igual que en tu `.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | igual que en tu `.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | igual que en tu `.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_APP_ID`              | igual que en tu `.env.local`                                       |
-| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`      | igual que en tu `.env.local`                                       |
-| `POCKETBASE_SERVICE_EMAIL`                 | `admin@akopia.org`                                                |
-| `POCKETBASE_SERVICE_PASSWORD`              | la misma que pusiste en `SERVICE_SUPERUSER_PASSWORD` en la Parte 1  |
-| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`        | igual que en tu `.env.local`                                       |
-| `CLOUDINARY_API_KEY`                       | igual que en tu `.env.local`                                       |
-| `CLOUDINARY_API_SECRET`                    | igual que en tu `.env.local`                                       |
+| Variable                                     | Valor                                                                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_PB_URL`                       | `https://akopia-backend-production.up.railway.app` (la de la Parte 1, sin `/` al final) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`             | igual que en tu`.env.local`                                                               |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`         | igual que en tu`.env.local`                                                               |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`          | igual que en tu`.env.local`                                                               |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | igual que en tu`.env.local`                                                               |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | igual que en tu`.env.local`                                                               |
+| `NEXT_PUBLIC_FIREBASE_APP_ID`              | igual que en tu`.env.local`                                                               |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`      | igual que en tu`.env.local`                                                               |
+| `POCKETBASE_SERVICE_EMAIL`                 | `admin@akopia.org`                                                                        |
+| `POCKETBASE_SERVICE_PASSWORD`              | la misma que pusiste en`SERVICE_SUPERUSER_PASSWORD` en la Parte 1                         |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`        | igual que en tu`.env.local`                                                               |
+| `CLOUDINARY_API_KEY`                       | igual que en tu`.env.local`                                                               |
+| `CLOUDINARY_API_SECRET`                    | igual que en tu`.env.local`                                                               |
 
 Todos los valores ya los tienes en `akopia-frontend/.env.local` (nunca se commitea, pero está en tu máquina) — es copiar y pegar cada uno.
 
@@ -111,7 +113,24 @@ Solo si vas a usar "Continuar con Google" (el login con correo y contraseña no 
 
 Login, panel, una donación de prueba, clasificar, ver el inventario moverse — el mismo criterio de "funcionando" que ya define este proyecto. No asumas que porque compiló ya sirve.
 
-### 3. Primer respaldo
+### 3. Catálogo con fotos, sin traer datos de más
+
+**No uses "Restaurar" un respaldo completo para esto** — trae también donaciones, solicitudes y todo lo demás que ya exista en el respaldo, y el destino debe quedar limpio salvo el catálogo. El catálogo (nombres, categorías, unidades) ya está sembrado igual en Railway por las propias migraciones; lo único que falta ahí es `photo_url`, cargado después a mano con Cloudinary. Usa `akopia-frontend/scripts/sync-catalog-photos-to-remote.mjs` en su lugar — copia solo ese campo, emparejando por nombre:
+
+```powershell
+$env:SOURCE_ADMIN_EMAIL="admin@akopia.org"
+$env:SOURCE_ADMIN_PASSWORD="<tu AKOPIA_INITIAL_ADMIN_PASSWORD local>"
+$env:REMOTE_PB_URL="https://<tu-dominio>.up.railway.app"
+$env:REMOTE_SUPERUSER_EMAIL="admin@akopia.org"
+$env:REMOTE_SUPERUSER_PASSWORD="<tu SERVICE_SUPERUSER_PASSWORD de Railway>"
+cd akopia-frontend
+node scripts/sync-catalog-photos-to-remote.mjs --dry-run   # revisa los emparejamientos primero
+node scripts/sync-catalog-photos-to-remote.mjs             # sin --dry-run, para escribir de verdad
+```
+
+> ⚠️ **Si cambias `SERVICE_SUPERUSER_PASSWORD` en Railway** (por ejemplo, para que este script pueda autenticarse), actualiza también `POCKETBASE_SERVICE_PASSWORD` en las variables de Vercel con el mismo valor — si quedan desincronizadas, el login por Firebase falla en silencio con un 500 genérico, aunque el resto del sitio (fotos incluidas) se vea perfecto.
+
+### 4. Primer respaldo
 
 En cuanto quede en pie, entra a `/panel/respaldos` y crea el primero — es el punto de partida limpio de este despliegue, y el archivo que vas a necesitar el día que se migre al servidor definitivo.
 
@@ -131,6 +150,7 @@ El mismo `Dockerfile` funciona sin cambios; solo hace falta `fly.toml`, ya en es
    ```powershell
    iwr https://fly.io/install.ps1 -useb | iex
    ```
+
    Cierra y abre una terminal nueva para que el `PATH` quede activo.
 2. `flyctl auth signup` (pide tarjeta, aunque el uso se quede en el nivel gratuito — es su verificación anti-abuso).
 3. Desde `akopia-backend/`: `flyctl launch --no-deploy` — nombre de app, región `bog` (Bogotá) o `mia` (Miami) si `bog` no aparece, sin Postgres/Redis.
