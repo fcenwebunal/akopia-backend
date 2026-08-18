@@ -523,10 +523,23 @@ Lo reservado no sale físicamente hasta confirmar la entrega. Si la entrega fall
 
 Por eso el efecto en inventario de cada operación vive en `utils/helpers.js` —`reserveInventory`, `closeReservation`, `applyReservationEffect`— y lo invocan **los dos caminos**: los hooks para las llamadas REST y las rutas directamente. Si escribes una ruta que mueve inventario y no llamas a esas funciones, el saldo no se actualiza y nadie te avisa.
 
-Dos detalles más:
+Tres detalles más:
 
 - **Los parámetros van entre llaves:** `/api/requests/{id}/approve`, y se leen con `e.request.pathValue("id")`. La sintaxis `:id` es de antes de la 0.23.
 - **`BadRequestError` no sirve para devolver datos.** Su segundo argumento lo interpreta PocketBase como errores de validación por campo. Para responder con una estructura propia hay que usar `e.json(400, ...)`, lo que obliga a validar antes de abrir la transacción.
+- **`/api/backups` (y otros paths bajo `/api/`) pueden ya estar reservados por PocketBase.** Una ruta propia con el mismo path queda tapada por la nativa, sin ningún error ni aviso al registrarla — el único síntoma es un 403/404 genérico que no viene de tu código. Si una ruta nueva responde con un mensaje que no reconoces, sospecha primero de una colisión de nombre.
+
+## 6c. Respaldo manual
+
+[`pb_hooks/07_backups.pb.js`](pb_hooks/07_backups.pb.js) — un admin de la app (no un superusuario real) puede respaldar la base sin entrar a `/_/`, que además la red de la UNAL no debe exponer.
+
+| Método | Ruta | Qué hace | Rol |
+|---|---|---|---|
+| `GET` | `/api/akopia-backups` | Lista los respaldos que ya existen | admin |
+| `POST` | `/api/akopia-backups` | Crea uno nuevo (`akopia_manual_<fecha>_<hora>.zip`) | admin + contraseña |
+| `POST` | `/api/akopia-backups/{key}/download` | Descarga el zip completo | admin + contraseña |
+
+Crear y descargar exigen repetir la contraseña nativa de PocketBase de quien llama (`record.validatePassword()`) — la sesión activa por sí sola no basta para una acción que exporta la base completa. **Restaurar no está aquí, a propósito:** sobreescribe toda la base y reinicia el proceso, cortando a cualquiera conectado en ese momento. Sigue siendo, deliberadamente, solo desde `/_/ → Settings → Backups`, con un superusuario real y el archivo descargado desde `/panel/respaldos` en el frontend.
 
 ### Idioma en el código
 
