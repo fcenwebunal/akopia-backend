@@ -358,23 +358,18 @@ routerAdd("GET", "/api/inventory/summary", (e) => {
 // se aprueba, lo que necesitaba ya se reservó, así que deja de contar
 // como faltante.
 //
-// Sin datos de quién pide ni para qué: solo producto, categoría y
-// cuánto falta. Es deliberado — esta ruta es la que en algún momento
-// va a alimentar una vista pública (qué donar), y ese dato no debe
-// llevar nada del solicitante. Hoy exige sesión como el resto de la
-// API; abrirla al público es quitar `requireOperator` y el segundo
-// argumento de `routerAdd`, nada más — la forma de la respuesta ya es
-// segura de mostrar afuera.
+// Sin datos de quién pide ni para qué: solo producto, categoría, foto y
+// cuánto falta. Es deliberado — esta ruta alimenta la landing pública
+// (qué donar) además del panel, y ese dato no debe llevar nada del
+// solicitante. Pública a propósito: sin `requireOperator` ni segundo
+// argumento en `routerAdd` — la forma de la respuesta ya era segura de
+// mostrar afuera desde que se escribió.
 //
 // No reutiliza `findInventory` (que busca una ubicación a la vez, y a
 // la que `request_items` nunca le pasa una real: ese campo no existe en
 // su esquema) — aquí se suma `available_qty` de todas las ubicaciones
 // de cada producto, que es lo que corresponde para saber si alcanza.
 routerAdd("GET", "/api/requests/missing-products", (e) => {
-  const { requireOperator } = require(`${__hooks}/utils/routes.js`);
-
-  requireOperator(e);
-
   const pendingItems = e.app.findRecordsByFilter(
     "request_items",
     "request_id.status = 'pendiente'",
@@ -424,13 +419,14 @@ routerAdd("GET", "/api/requests/missing-products", (e) => {
       requested_qty: requested,
       available_qty: available,
       missing_qty: missing,
+      photo_url: product.get("photo_url") || "",
     });
   }
 
   items.sort((a, b) => b.missing_qty - a.missing_qty);
 
   return e.json(200, { items: items });
-}, $apis.requireAuth());
+});
 
 // ── POST /api/dispatches/{id}/confirm-delivery ───────────────
 // Cierra el ciclo: registra la entrega y saca de bodega lo entregado.

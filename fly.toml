@@ -1,0 +1,31 @@
+# Plantilla de partida — `fly launch` la reescribe con el nombre y la
+# región que confirmes de forma interactiva. Después de eso, revisa que
+# quede así: un solo proceso, un volumen montado en /pb/pb_data, y
+# `min_machines_running = 1` para que no se apague solo (PocketBase +
+# SQLite no está pensado para arrancar en frío en cada visita).
+#
+# NUNCA correr más de una máquina: SQLite no admite dos procesos
+# escribiendo el mismo archivo a la vez. Un volumen de Fly ya está
+# atado a una sola máquina por diseño, pero no actives el
+# autoescalado horizontal de todas formas.
+
+app = "akopia-backend"
+primary_region = "bog"
+
+[build]
+
+[[mounts]]
+  source = "akopia_data"
+  destination = "/pb/pb_data"
+
+[http_service]
+  internal_port = 8090
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

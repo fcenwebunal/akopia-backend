@@ -1,0 +1,14 @@
+pb_data
+pb_data_backup
+pocketbase
+pocketbase.exe
+.env
+.env.local
+*.log
+*.zip
+.git
+scripts
+DESPLIEGUE.md
+PUESTA-EN-MARCHA.md
+AUDITORIA-HOOKS.md
+PROPUESTA-MODELO-INVENTARIO.md
