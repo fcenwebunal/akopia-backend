@@ -2,10 +2,10 @@
 
 **Por qué existe este documento:** OTIC (Carlos) no ha respondido con el acceso al servidor de la UNAL, y el aplicativo tiene que estar en producción recolectando datos. Decisión de Juan Manuel (18 ago 2026): desplegar de forma **provisional** en hosting público, y migrar a `172.23.177.12` (`DESPLIEGUE.md`) en cuanto haya VPN. Nada de lo que sigue es definitivo — es para hoy.
 
-| | |
-|---|---|
+|                                |                                                                   |
+| ------------------------------ | ----------------------------------------------------------------- |
 | **Backend** (PocketBase) | Fly.io — proceso y disco persistentes, algo que Vercel no ofrece |
-| **Frontend** (Next.js) | Vercel |
+| **Frontend** (Next.js)   | Vercel                                                            |
 
 Los archivos que hacen falta ya están en este repositorio: [`Dockerfile`](Dockerfile), [`.dockerignore`](.dockerignore), [`fly.toml`](fly.toml).
 
@@ -27,25 +27,36 @@ Si no tienes `pwsh` (PowerShell 7), el mismo comando funciona igual en Windows P
 iwr https://fly.io/install.ps1 -useb | iex
 ```
 
-Cierra y vuelve a abrir la terminal para que `fly` quede en el `PATH`.
+Cierra y vuelve a abrir la terminal para que el `PATH` nuevo quede activo.
+
+> ⚠️ **El comando se llama `flyctl`, no `fly`.** El instalador deja el binario como `flyctl.exe` en `%USERPROFILE%\.fly\bin` — sin ningún `fly.exe` al lado, aunque la documentación de Fly hable de "el comando fly" en prosa. Si escribes `fly auth signup` te va a dar "no se reconoce como cmdlet", incluso con el `PATH` bien puesto. Todos los comandos de esta guía usan `flyctl` a propósito, por esto mismo — confirmado en una instalación real, no asumido.
+
+Si después de abrir una ventana nueva `flyctl` sigue sin reconocerse, comprueba con:
+
+```powershell
+Get-Command flyctl
+```
+
+Si tampoco lo encuentra ahí, es que la ventana en la que probaste no heredó el `PATH` actualizado (pasa seguido con la terminal integrada de un editor que ya estaba abierto antes de instalar) — cierra **el programa entero** (no solo la pestaña de la terminal) y ábrelo de nuevo, o usa una ventana de PowerShell abierta directo desde el menú de inicio. Como último recurso, siempre puedes llamarlo por su ruta completa sin depender del `PATH`: `& "$env:USERPROFILE\.fly\bin\flyctl.exe" auth signup`.
 
 ### 2. Crear cuenta e iniciar sesión
 
 ```powershell
-fly auth signup
+flyctl auth signup
 ```
 
-(o `fly auth login` si ya tienes cuenta). Fly pide una tarjeta al activar la cuenta, incluso para el uso gratuito — es su verificación anti-abuso. Una máquina pequeña como esta debería mantenerse dentro del uso gratuito, pero confírmalo en su panel de facturación una vez dentro; los precios no los fija este documento.
+(o `flyctl auth login` si ya tienes cuenta). Fly pide una tarjeta al activar la cuenta, incluso para el uso gratuito — es su verificación anti-abuso. Una máquina pequeña como esta debería mantenerse dentro del uso gratuito, pero confírmalo en su panel de facturación una vez dentro; los precios no los fija este documento.
 
 ### 3. Lanzar la app (sin desplegar todavía)
 
 Desde `akopia-backend/`:
 
 ```powershell
-fly launch --no-deploy
+flyctl launch --no-deploy
 ```
 
 Va a preguntar:
+
 - **Nombre de la app** — el que quieras (queda en `<nombre>.fly.dev`). Si `akopia-backend` ya está tomado por otra cuenta, prueba `akopia-backend-unal`.
 - **Región** — `bog` (Bogotá) si aparece disponible; si no, `mia` (Miami) es la alternativa más cercana.
 - **¿Postgres/Redis?** — No a ambas. Ya tenemos SQLite propio.
@@ -56,29 +67,29 @@ Esto reescribe `fly.toml` con el nombre y región reales. Revisa que conserve: u
 ### 4. Crear el volumen persistente
 
 ```powershell
-fly volumes create akopia_data --region bog --size 1
+flyctl volumes create akopia_data --region bog --size 1
 ```
 
-(`--region` con la misma que confirmaste en el paso 3; `--size 1` es 1 GB, de sobra para empezar — se amplía después con `fly volumes extend` si hace falta, sin perder datos).
+(`--region` con la misma que confirmaste en el paso 3; `--size 1` es 1 GB, de sobra para empezar — se amplía después con `flyctl volumes extend` si hace falta, sin perder datos).
 
 ### 5. Configurar la contraseña del admin inicial
 
 Es la misma variable que ya conoces de `.env` local — sin ella, la migración `023` bloquea el arranque a propósito:
 
 ```powershell
-fly secrets set AKOPIA_INITIAL_ADMIN_PASSWORD="la-misma-que-tienes-en-tu-.env-local-o-una-nueva"
+flyctl secrets set AKOPIA_INITIAL_ADMIN_PASSWORD="la-misma-que-tienes-en-tu-.env-local-o-una-nueva"
 ```
 
 ### 6. Desplegar
 
 ```powershell
-fly deploy
+flyctl deploy
 ```
 
 ### 7. Verificar
 
 ```powershell
-fly status
+flyctl status
 ```
 
 Y en el navegador: `https://<tu-app>.fly.dev/api/health` debe responder `{"message":"API is healthy."...}`.
@@ -88,7 +99,7 @@ Y en el navegador: `https://<tu-app>.fly.dev/api/health` debe responder `{"messa
 El frontend necesita un superusuario real de PocketBase para `/api/auth/firebase` — el mismo mecanismo que ya usas en local, reutilizando el correo `admin@akopia.org` (ver el `CLAUDE.md` del frontend, entrada del 18 de agosto sobre esta desviación deliberada).
 
 ```powershell
-fly ssh console
+flyctl ssh console
 ```
 
 Ya dentro del contenedor:
@@ -127,21 +138,21 @@ Con GitHub es lo más simple — el repo `fcenwebunal/akopia-frontend` es públi
 
 Antes de darle a Deploy (o después, en **Settings → Environment Variables** — cualquiera de los dos momentos sirve, pero sin esto el build no funciona de verdad):
 
-| Variable | Valor |
-|---|---|
-| `NEXT_PUBLIC_PB_URL` | `https://<tu-app>.fly.dev` (la de la Parte 1, sin `/` al final) |
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | igual que en tu `.env.local` |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | igual que en tu `.env.local` |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | igual que en tu `.env.local` |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | igual que en tu `.env.local` |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | igual que en tu `.env.local` |
-| `NEXT_PUBLIC_FIREBASE_APP_ID` | igual que en tu `.env.local` |
-| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | igual que en tu `.env.local` |
-| `POCKETBASE_SERVICE_EMAIL` | `admin@akopia.org` |
-| `POCKETBASE_SERVICE_PASSWORD` | la misma que usaste en el paso 8 de la Parte 1 |
-| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | igual que en tu `.env.local` |
-| `CLOUDINARY_API_KEY` | igual que en tu `.env.local` |
-| `CLOUDINARY_API_SECRET` | igual que en tu `.env.local` |
+| Variable                                     | Valor                                                               |
+| -------------------------------------------- | ------------------------------------------------------------------- |
+| `NEXT_PUBLIC_PB_URL`                       | `https://<tu-app>.fly.dev` (la de la Parte 1, sin `/` al final) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`             | igual que en tu`.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`         | igual que en tu`.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`          | igual que en tu`.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | igual que en tu`.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | igual que en tu`.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_APP_ID`              | igual que en tu`.env.local`                                       |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`      | igual que en tu`.env.local`                                       |
+| `POCKETBASE_SERVICE_EMAIL`                 | `admin@akopia.org`                                                |
+| `POCKETBASE_SERVICE_PASSWORD`              | la misma que usaste en el paso 8 de la Parte 1                      |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`        | igual que en tu`.env.local`                                       |
+| `CLOUDINARY_API_KEY`                       | igual que en tu`.env.local`                                       |
+| `CLOUDINARY_API_SECRET`                    | igual que en tu`.env.local`                                       |
 
 Todos los valores ya los tienes en `akopia-frontend/.env.local` (nunca se commitea, pero está en tu máquina) — es copiar y pegar cada uno.
 
