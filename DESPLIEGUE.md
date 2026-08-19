@@ -55,9 +55,11 @@ Test-NetConnection 172.23.177.12 -Port 22
 
 `TcpTestSucceeded : True`, y el campo `SourceAddress` ya no muestra tu red doméstica sino una de la UNAL. Ese cambio es la señal de que estás dentro.
 
-### Pendiente con OTIC
+### Dominio y certificado — resuelto el 19 ago 2026
 
-El **dominio y el certificado** siguen sin resolverse. El subdominio propuesto es `acopio.manizales.unal.edu.co`; hay que confirmar si OTIC lo crea y emite el certificado TLS. Sin eso, el sitio queda accesible solo por IP y sin HTTPS — suficiente para desarrollo y demos internas, **no para operar con datos reales de donantes**.
+`acopio.manizales.unal.edu.co` con TLS ya está instalado y funcionando en el servidor. Carlos (OTIC) dejó el certificado en `/etc/ssl/Certificados/` del propio servidor (`manizales.crt` + `manizales.key`, wildcard `*.manizales.unal.edu.co`, Sectigo, vence 29 oct 2026). El `.crt` que entregó traía solo el certificado hoja, sin la cadena intermedia — se completó con el intermedio de Sectigo (`SectigoPublicServerAuthenticationCADVR36`, vía su AIA) antes de instalarlo, si no algunos clientes que no completan la cadena solos (curl, apps, navegadores viejos) habrían fallado.
+
+**Pendiente real con OTIC, no resuelto:** el DNS **público** de `acopio.manizales.unal.edu.co` resuelve a `168.176.155.47`, que no es este servidor (`172.23.177.12`) — probablemente el escaneo de Carlos se hizo desde dentro de la red UNAL, donde el DNS interno sí apunta bien. Desde fuera (o por VPN, que no cambia la resolución pública), el dominio no llega al servidor todavía. Hay que pedirle a OTIC que corrija el registro público antes de anunciar la URL a donantes reales.
 
 ---
 
@@ -236,14 +238,13 @@ sudo -u akopia -H bash
 cd /opt/akopia/frontend
 git clone https://github.com/fcenwebunal/akopia-frontend.git .
 
-# Mientras no exista el subdominio, apunta a la IP
-echo "NEXT_PUBLIC_PB_URL=http://172.23.177.12" > .env.production
+echo "NEXT_PUBLIC_PB_URL=https://acopio.manizales.unal.edu.co" > .env.production
 
 npm ci && npm run build
 exit
 ```
 
-> Cuando OTIC cree el subdominio, cambia esta línea a `https://acopio.manizales.unal.edu.co`, vuelve a correr `npm run build` y reinicia el servicio. Las variables `NEXT_PUBLIC_*` se incrustan en el build: no basta con reiniciar.
+> **Con TLS ya instalado (19 ago 2026), esta variable tiene que apuntar al dominio por `https://`, nunca a la IP por `http://`.** Servir la página por HTTPS y llamar a la API por HTTP es contenido mixto — el navegador lo bloquea y la app entera deja de funcionar (login, donaciones, todo lo que llama a PocketBase). Las variables `NEXT_PUBLIC_*` se incrustan en el build: cambiar el valor exige `npm run build` de nuevo, no basta con reiniciar el servicio.
 
 `/etc/systemd/system/akopia-frontend.service`:
 
@@ -281,12 +282,22 @@ sudo systemctl enable --now akopia-frontend
 
 ## 6. nginx
 
+**Desde el 19 ago 2026, con TLS instalado.** El certificado (wildcard `*.manizales.unal.edu.co`, con la cadena de Sectigo ya completada) vive en `/etc/ssl/certs/acopio.manizales.unal.edu.co.crt` y `/etc/ssl/private/acopio.manizales.unal.edu.co.key`. Tres bloques: el dominio en 80 redirige a HTTPS; la IP desnuda en 80 se deja sin redirigir (el certificado no la cubre — redirigirla produciría un aviso de certificado inválido); el dominio en 443 sirve de verdad, con las cabeceras de seguridad que pidió el escaneo de Carlos.
+
+> **nginx 1.24 (la versión del servidor) no entiende `http2 on;`** — esa sintaxis llegó en 1.25.1. Usar `listen 443 ssl http2;` (la forma vieja, en la misma línea del `listen`).
+
 `/etc/nginx/sites-available/akopia`:
 
 ```nginx
 server {
     listen 80;
-    server_name 172.23.177.12;   # luego: acopio.manizales.unal.edu.co
+    server_name acopio.manizales.unal.edu.co;
+    return 301 https://acopio.manizales.unal.edu.co$request_uri;
+}
+
+server {
+    listen 80;
+    server_name 172.23.177.12;
 
     client_max_body_size 10M;    # fotos de donación y firmas
 
@@ -305,9 +316,59 @@ server {
     }
 
     location /_/ {
-        # Panel de administración: acceso total a la base.
-        # Restringido a la red interna mientras no haya otra medida.
         allow 172.16.0.0/12;
+        allow 10.100.100.0/24;   # rango real de la VPN FortiClient (18 ago 2026)
+        deny all;
+
+        proxy_pass http://127.0.0.1:8090;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host       $host;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name acopio.manizales.unal.edu.co;
+
+    ssl_certificate     /etc/ssl/certs/acopio.manizales.unal.edu.co.crt;
+    ssl_certificate_key /etc/ssl/private/acopio.manizales.unal.edu.co.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    client_max_body_size 10M;
+
+    server_tokens off;   # no divulgar la versión de nginx
+
+    # Cabeceras que pidió el escaneo de Carlos (OTIC), 19 ago 2026
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com https://*.basemaps.cartocdn.com https://*.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://api.cloudinary.com https://*.googleapis.com https://securetoken.googleapis.com; frame-src https://accounts.google.com https://akopia.firebaseapp.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 24h;
+    }
+
+    location /_/ {
+        allow 172.16.0.0/12;
+        allow 10.100.100.0/24;
         deny all;
 
         proxy_pass http://127.0.0.1:8090;
@@ -330,7 +391,9 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-> **El panel `/_/` es lo más sensible del despliegue:** da acceso completo a la base, incluidos los datos personales de donantes y destinatarios. La regla `allow`/`deny` de arriba lo limita a la red interna. Lo más seguro es cerrarlo del todo y llegar por túnel SSH: `ssh -L 8090:127.0.0.1:8090 juan@172.23.177.12` y abrir `http://127.0.0.1:8090/_/` en tu máquina.
+> **El panel `/_/` es lo más sensible del despliegue:** da acceso completo a la base, incluidos los datos personales de donantes y destinatarios. La regla `allow`/`deny` de arriba lo limita a la red interna y a la VPN. Lo más seguro es cerrarlo del todo y llegar por túnel SSH: `ssh -L 8090:127.0.0.1:8090 juan@172.23.177.12` y abrir `http://127.0.0.1:8090/_/` en tu máquina.
+>
+> **El CSP se armó revisando a qué dominios externos llama la app de verdad** (Cloudinary para fotos, Nominatim/CartoDB para el mapa de direcciones, Google/Firebase para el login) — no se verificó en un navegador real por falta de esa herramienta en la sesión que lo instaló. Si algo del sitio deja de funcionar (mapa, login con Google, subir fotos) después de este cambio, lo primero es abrir la consola del navegador y buscar líneas que empiecen con "Refused to..." — ahí dice exactamente qué dominio falta agregar al CSP.
 
 ### Cortafuegos
 
@@ -401,9 +464,9 @@ sudo systemctl restart akopia-frontend
 |---|---|
 | ~~VPN para `judiazgom`~~ | ✅ Confirmado: FortiClient. Falta la versión del instalador |
 | ~~Confirmar `sudo` para `juan`~~ | ✅ Confirmado: Ubuntu con `sudo` |
-| **Subdominio `acopio.manizales.unal.edu.co`** | Sin guiones y sin `www`, según la directriz B1 |
+| ~~Certificado TLS~~ | ✅ Instalado 19 ago 2026. Carlos lo dejó en `/etc/ssl/Certificados/` del servidor (wildcard `*.manizales.unal.edu.co`, Sectigo, vence 29 oct 2026) |
+| **DNS público de `acopio.manizales.unal.edu.co` resuelve a `168.176.155.47`, no a este servidor** | El sitio con TLS funciona de punta a punta *dentro* de la red/VPN de la UNAL (donde el DNS interno sí apunta bien — así lo vio el escaneo de Carlos). Desde fuera, el dominio no llega. Hay que pedirle a OTIC que corrija el registro público antes de compartir la URL con donantes reales |
 | **¿La IP es fija o por DHCP?** | Si cambia sola, todo lo que apunte a ella se rompe sin aviso |
-| **Certificado TLS** | Lo emite la Universidad. **No instalar certbot** contra un dominio institucional |
 | **Acceso al panel `/_/`** | Acordar si se restringe por IP o se cierra y se usa túnel SSH |
 | **Política de respaldos** | Si OTIC ya respalda la VM, se evita duplicar |
 
