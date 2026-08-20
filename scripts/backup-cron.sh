@@ -12,6 +12,7 @@
 #   POCKETBASE_SERVICE_PASSWORD
 #   BACKUP_RETENTION_DAYS         default 30
 set -euo pipefail
+cd /opt/akopia/backend
 
 PB_URL="${PB_URL:-http://127.0.0.1:8090}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
