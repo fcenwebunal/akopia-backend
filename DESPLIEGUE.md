@@ -238,13 +238,16 @@ sudo -u akopia -H bash
 cd /opt/akopia/frontend
 git clone https://github.com/fcenwebunal/akopia-frontend.git .
 
-echo "NEXT_PUBLIC_PB_URL=https://acopio.manizales.unal.edu.co" > .env.production
+cat > .env.production <<'EOF'
+NEXT_PUBLIC_PB_URL=
+PB_INTERNAL_URL=http://127.0.0.1:8090
+EOF
 
 npm ci && npm run build
 exit
 ```
 
-> **Con TLS ya instalado (19 ago 2026), esta variable tiene que apuntar al dominio por `https://`, nunca a la IP por `http://`.** Servir la página por HTTPS y llamar a la API por HTTP es contenido mixto — el navegador lo bloquea y la app entera deja de funcionar (login, donaciones, todo lo que llama a PocketBase). Las variables `NEXT_PUBLIC_*` se incrustan en el build: cambiar el valor exige `npm run build` de nuevo, no basta con reiniciar el servicio.
+> **`NEXT_PUBLIC_PB_URL` va vacía en producción, a propósito — no la IP, no el dominio.** Con base URL vacía, el SDK de PocketBase que corre en el navegador resuelve contra `location.origin`: el mismo host y protocolo desde el que se cargó la página. Así funciona igual si alguien entra por `http://172.23.177.12` o por `https://acopio.manizales.unal.edu.co`, sin depender de cuál de los dos es alcanzable desde donde esté el usuario — justo el problema real que salió el 19 de agosto: fijarla al dominio rompió el login para quien entraba por la IP, porque el dominio no es alcanzable desde dentro de la red UNAL mientras el NAT con OTIC siga pendiente (ver §0 y bitácora del `CLAUDE.md`). `PB_INTERNAL_URL` es la que usan las rutas del propio servidor (el puente de Firebase, `requireAdmin`, la landing pública) para hablar con PocketBase — esa sí se queda fija en `127.0.0.1:8090`, porque corre en el servidor mismo, no en el navegador de nadie. Las variables `NEXT_PUBLIC_*` se incrustan en el build: cambiar el valor exige `npm run build` de nuevo, no basta con reiniciar el servicio.
 
 `/etc/systemd/system/akopia-frontend.service`:
 
@@ -347,8 +350,14 @@ server {
 
     server_tokens off;   # no divulgar la versión de nginx
 
-    # Cabeceras que pidió el escaneo de Carlos (OTIC), 19 ago 2026
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com https://*.basemaps.cartocdn.com https://*.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://api.cloudinary.com https://*.googleapis.com https://securetoken.googleapis.com; frame-src https://accounts.google.com https://akopia.firebaseapp.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+    # Cabeceras que pidió el escaneo de Carlos (OTIC), 19 ago 2026.
+    # script-src/connect-src ganaron apis.google.com y www.gstatic.com
+    # el 20 de agosto: sin ellos, "Continuar con Google" cargaba
+    # apis.google.com/js/api.js y el propio CSP lo bloqueaba en
+    # silencio (solo se ve en la consola del navegador, la petición ni
+    # siquiera sale a red) — encontrado probando el login real después
+    # de crear una cuenta nueva.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com https://*.basemaps.cartocdn.com https://*.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://api.cloudinary.com https://*.googleapis.com https://securetoken.googleapis.com https://apis.google.com; frame-src https://accounts.google.com https://akopia.firebaseapp.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;

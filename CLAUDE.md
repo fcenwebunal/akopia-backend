@@ -358,3 +358,11 @@ Pedido explícito de Juan Manuel, evaluado por escrito antes de tocar el esquema
 Verificado de punta a punta contra un servidor de prueba real (no `pb_data` real): una donación creada sin ítems, con peso declarado y transportista; un artículo agregado después, desde una sesión distinta, a una remesa ya existente; cierre de clasificación con el peso declarado como valor por defecto; y Coordinación cerrando una remesa que no recibió ella misma.
 
 Detalle del frontend (el interruptor "Solo recepción rápida" en `donaciones/nueva`, y "Agregar artículo"/"Cerrar clasificación"/"Reabrir" en `donaciones/[id]`, que hoy no existían) en el `CLAUDE.md` del frontend.
+
+### 2026-08-20 (noche) — "Continuar con Google" bloqueado por el CSP que se agregó por el pentest
+
+Al crear la cuenta de `judiazgom@unal.edu.co` (Juan Manuel Díaz Gómez, OTIC) y probar "Continuar con Google" desde `/login` en el servidor de la UNAL, el navegador lo rechazaba en silencio: *"Loading the script 'https://apis.google.com/js/api.js' violates ... script-src 'self' 'unsafe-inline'"*. La petición ni siquiera salía a la red — el propio Content-Security-Policy que se agregó el 19 de agosto (hallazgo del pentest de Carlos) nunca contempló que Google Sign-In carga su propio script desde `apis.google.com`, un dominio que no está bajo `*.googleapis.com` (son dominios distintos: `google.com` vs. `googleapis.com`).
+
+**Corregido en `/etc/nginx/sites-available/akopia`** (y en `DESPLIEGUE.md` para que la guía no vuelva a quedar desactualizada): `script-src` gana `https://apis.google.com https://www.gstatic.com`, `connect-src` gana `https://apis.google.com`. `nginx -t` antes de `systemctl reload nginx` (recarga, no reinicio — no corta conexiones activas). Verificado con la cabecera real de producción tras la recarga.
+
+**No se corrigió esto el 19 de agosto porque nunca se probó un login real por Google contra el servidor de la UNAL en ese momento** — el escaneo de Carlos fue automatizado (ZAP), no ejercitó el flujo de Google Sign-In con clic real. Coincide con el mismo patrón del otro bug de hoy (el login desde `/login` roto por la URL vacía del SDK): las verificaciones automatizadas y los `curl` no sustituyen un clic real en el navegador — los dos bugs de esta sesión salieron exactamente cuando alguien probó de verdad, no antes.
