@@ -464,11 +464,10 @@ Los puertos 8090 y 3000 quedan cerrados desde fuera: solo nginx entra.
 
 PocketBase los trae integrados: panel → *Settings* → *Backups*, con programación automática. El zip incluye la base y los archivos subidos, y se restaura en una instancia nueva desde la misma pantalla.
 
-Como copia adicional fuera del proceso, en `sudo crontab -e`:
+**El cron diario usa la API nativa de respaldos (`POST /api/backups`), no un `tar` en caliente del directorio.** `app.createBackup()` hace un checkpoint y una copia consistente del propio motor de SQLite; un `tar czf` leyendo `pb_data` mientras el proceso escribe en modo WAL no ofrece esa garantía — es sospechoso de una corrupción real de `data.db` en producción el 20 de agosto de 2026 (ver bitácora de ese día), aunque la causa exacta no quedó confirmada. El script vive en `scripts/backup-cron.sh` (lee el superusuario de servicio del `.env.production` del frontend, crea el respaldo por API y borra los `auto_*.zip` con más de 30 días — nunca toca los respaldos manuales de `/panel/respaldos`). En `sudo crontab -e` para el usuario `akopia`:
 
 ```
-0 3 * * * su -s /bin/bash akopia -c 'tar czf /opt/akopia/backups/pb_$(date +\%F).tgz -C /opt/akopia/backend pb_data'
-0 4 * * 0 find /opt/akopia/backups -name 'pb_*.tgz' -mtime +30 -delete
+0 3 * * * /opt/akopia/backend/scripts/backup-cron.sh >> /var/log/akopia-backup.log 2>&1
 ```
 
 **Ensaya la restauración antes de tener datos reales.** Un respaldo que nunca se restauró no es un respaldo.
