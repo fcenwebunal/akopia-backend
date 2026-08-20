@@ -97,6 +97,7 @@ var CATALOG_GUARDED_FIELDS = {
     "requires_quarantine",
     "active",
   ],
+  locations: ["zone", "shelf", "position", "description", "capacity_m3", "is_cold_chain", "active"],
 };
 
 module.exports = {

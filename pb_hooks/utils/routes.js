@@ -23,9 +23,34 @@ function requireOperator(e) {
 
 function requireAdmin(e) {
   var auth = requireOperator(e);
+  var roles = auth.get("role") || [];
 
-  if (auth.get("role") !== "admin") {
+  if (roles.indexOf("admin") === -1) {
     throw new ForbiddenError("Esta operación requiere rol de administrador");
+  }
+
+  return auth;
+}
+
+// Exige que la cuenta autenticada y activa tenga al menos uno de los
+// roles en `allowed` (ver utils/roles.js para el catálogo). `admin`
+// no se agrega implícitamente aquí — cada ruta que deba dejar pasar
+// también a un administrador lo incluye explícitamente en su lista,
+// igual que ya hacían las reglas de acceso de las colecciones.
+function requireRole(e, allowed) {
+  var auth = requireOperator(e);
+  var roles = auth.get("role") || [];
+
+  var ok = false;
+  for (var i = 0; i < allowed.length; i++) {
+    if (roles.indexOf(allowed[i]) !== -1) {
+      ok = true;
+      break;
+    }
+  }
+
+  if (!ok) {
+    throw new ForbiddenError("Tu rol no tiene permiso para esta operación");
   }
 
   return auth;
@@ -57,5 +82,6 @@ function loadRequest(app, requestId, expectedStatus) {
 module.exports = {
   requireOperator: requireOperator,
   requireAdmin: requireAdmin,
+  requireRole: requireRole,
   loadRequest: loadRequest,
 };

@@ -19,11 +19,11 @@
 // ── POST /api/requests/{id}/approve ──────────────────────────
 // Aprueba una solicitud y reserva el inventario de todos sus renglones.
 routerAdd("POST", "/api/requests/{id}/approve", (e) => {
-  const { requireAdmin, loadRequest } = require(`${__hooks}/utils/routes.js`);
+  const { requireRole, loadRequest } = require(`${__hooks}/utils/routes.js`);
   const { reserveInventory, findInventoryRows } = require(`${__hooks}/utils/helpers.js`);
 
   const requestId = e.request.pathValue("id");
-  const operator = requireAdmin(e);
+  const operator = requireRole(e, ["admin", "coordinacion", "salida"]);
 
   const body = new DynamicModel({ notes: "" });
   try {
@@ -153,10 +153,10 @@ routerAdd("POST", "/api/requests/{id}/approve", (e) => {
 
 // ── POST /api/requests/{id}/reject ───────────────────────────
 routerAdd("POST", "/api/requests/{id}/reject", (e) => {
-  const { requireAdmin, loadRequest } = require(`${__hooks}/utils/routes.js`);
+  const { requireRole, loadRequest } = require(`${__hooks}/utils/routes.js`);
 
   const requestId = e.request.pathValue("id");
-  requireAdmin(e);
+  requireRole(e, ["admin", "coordinacion", "salida"]);
 
   const body = new DynamicModel({ reason: "" });
   e.bindBody(body);
@@ -183,11 +183,11 @@ routerAdd("POST", "/api/requests/{id}/reject", (e) => {
 // ── POST /api/requests/{id}/cancel ───────────────────────────
 // Cancela y libera todas las reservas activas: el stock vuelve a disponible.
 routerAdd("POST", "/api/requests/{id}/cancel", (e) => {
-  const { requireOperator, loadRequest } = require(`${__hooks}/utils/routes.js`);
+  const { requireRole, loadRequest } = require(`${__hooks}/utils/routes.js`);
   const { closeReservation, findActiveReservations } = require(`${__hooks}/utils/helpers.js`);
 
   const requestId = e.request.pathValue("id");
-  const operator = requireOperator(e);
+  const operator = requireRole(e, ["admin", "coordinacion", "salida"]);
 
   const body = new DynamicModel({ reason: "" });
   e.bindBody(body);
@@ -431,11 +431,11 @@ routerAdd("GET", "/api/requests/missing-products", (e) => {
 // ── POST /api/dispatches/{id}/confirm-delivery ───────────────
 // Cierra el ciclo: registra la entrega y saca de bodega lo entregado.
 routerAdd("POST", "/api/dispatches/{id}/confirm-delivery", (e) => {
-  const { requireOperator } = require(`${__hooks}/utils/routes.js`);
+  const { requireRole } = require(`${__hooks}/utils/routes.js`);
   const { closeReservation, findActiveReservations } = require(`${__hooks}/utils/helpers.js`);
 
   const dispatchId = e.request.pathValue("id");
-  const operator = requireOperator(e);
+  const operator = requireRole(e, ["admin", "transporte_distribucion", "salida"]);
 
   const body = new DynamicModel({
     receiver_name: "",
@@ -527,11 +527,11 @@ routerAdd("POST", "/api/dispatches/{id}/confirm-delivery", (e) => {
 // No cambia el `donation_item` original: ese sigue contando de dónde
 // vino la mercancía, esto solo mueve dónde está guardada ahora.
 routerAdd("POST", "/api/inventory/{id}/relocate", (e) => {
-  const { requireOperator } = require(`${__hooks}/utils/routes.js`);
+  const { requireRole } = require(`${__hooks}/utils/routes.js`);
   const { relocateInventory } = require(`${__hooks}/utils/helpers.js`);
 
   const inventoryId = e.request.pathValue("id");
-  const operator = requireOperator(e);
+  const operator = requireRole(e, ["admin", "coordinacion"]);
 
   const body = new DynamicModel({
     location_id: "",
@@ -573,11 +573,11 @@ routerAdd("POST", "/api/inventory/{id}/relocate", (e) => {
 // solo corrige el saldo agregado, igual que ya hace un ajuste con
 // `available_qty`.
 routerAdd("POST", "/api/inventory/{id}/reject", (e) => {
-  const { requireOperator } = require(`${__hooks}/utils/routes.js`);
+  const { requireRole } = require(`${__hooks}/utils/routes.js`);
   const { rejectQuarantine } = require(`${__hooks}/utils/helpers.js`);
 
   const inventoryId = e.request.pathValue("id");
-  const operator = requireOperator(e);
+  const operator = requireRole(e, ["admin", "coordinacion"]);
 
   const body = new DynamicModel({
     quantity: 0,
