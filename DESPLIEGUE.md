@@ -304,6 +304,31 @@ server {
 
     client_max_body_size 10M;    # fotos de donación y firmas
 
+    # Rutas propias del frontend (Next.js) que también empiezan por
+    # /api/ — location exacta, gana por precedencia sobre la /api/
+    # general de abajo (que va al backend), sin importar el orden en
+    # el archivo. Sin esto, PocketBase responde 404 porque no tiene
+    # estas rutas (encontrado el 20 de agosto probando el login real
+    # por Google, no antes — hasta entonces nadie había completado el
+    # flujo de Firebase contra este servidor).
+    location = /api/auth/firebase {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/uploads/sign {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:8090;
         proxy_http_version 1.1;
@@ -361,6 +386,24 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    location = /api/auth/firebase {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/uploads/sign {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
     location /api/ {
         proxy_pass http://127.0.0.1:8090;
