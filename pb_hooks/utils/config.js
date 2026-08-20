@@ -75,6 +75,8 @@ var AUDIT_FIELDS = {
     "delivery_date",
   ],
   users: ["full_name", "role", "phone", "active"],
+  kits: ["name", "description", "active"],
+  kit_items: ["kit_id", "product_id", "unit_id", "quantity"],
 };
 
 var AUDITED_COLLECTIONS = Object.keys(AUDIT_FIELDS);
