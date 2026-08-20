@@ -25,6 +25,11 @@ var AUDIT_FIELDS = {
     "donor_rfc",
     "notes",
     "operator_id",
+    "status",
+    "total_weight_kg",
+    "classified_weight_kg",
+    "carrier_name",
+    "classification_closed_by",
   ],
   donation_items: [
     "product_id",

@@ -340,3 +340,21 @@ Verificado de punta a punta contra un servidor de prueba real (no `pb_data` real
 **Pedido también por Juan Manuel, antes de dar por buena la implementación:** confirmar que el flujo manual de solicitudes (sin kits) seguía intacto tras los cambios de roles de esa misma mañana. Verificado de punta a punta: crear solicitud → aprobar (con inventario real, clasificado por un voluntariado real) → despachar (transporte y distribución) → confirmar entrega. Sin regresión.
 
 Detalle del frontend (tres pantallas nuevas bajo `/panel/kits`, y el selector de kit dentro de `solicitudes/nueva`) en el `CLAUDE.md` del frontend.
+
+### 2026-08-20 (noche) — Recepción rápida de remesas: `donations.status`, sin ningún hook nuevo
+
+Pedido explícito de Juan Manuel, evaluado por escrito antes de tocar el esquema (`PROPUESTA-RECEPCION-REMESAS.md`). **Hallazgo real, antes de proponer nada:** el modelo ya soportaba una donación sin artículos — `donation_items.createRule` nunca exigió que ocurriera en la misma petición que crear la `donation`. El cuello de botella descrito era enteramente de interfaz, no del esquema.
+
+**Migración `049`** — `donations` gana `status` (`recepcion`/`clasificada`, `SelectField` requerido — sin el problema de "0 es vacío" que sí tienen los `NumberField`, así que aquí `required: true` es seguro), `total_weight_kg`, `classified_weight_kg`, `carrier_name`, `classification_closed_at`/`classification_closed_by`. Los cuatro últimos **sin** `required: true` a propósito, aunque la recepción rápida los pide en la práctica: un `NumberField` obligatorio sobre una colección con filas ya existentes puede bloquear la edición futura de un registro viejo sin ese dato — el mismo problema que ya corrigió la migración `025` sobre `inventory`. La obligatoriedad real vive en la pantalla, no en el esquema.
+
+**Corrección de modelo, no solo de nombre:** el pedido original sugería un tercer estado "en cuarentena" a nivel de remesa. Señalado y corregido antes de implementar — cuarentena ya es un estado de cada `donation_item`, y una remesa real casi siempre termina con artículos en estados distintos a la vez (algo apto, algo en revisión). Un estado de cabecera "en cuarentena" habría sido engañoso en cuanto el primer artículo se marcara apto. Quedaron dos estados que describen únicamente si el trabajo de clasificar terminó: `recepcion` (nombre elegido por Juan Manuel, en reemplazo de "pendiente de clasificación") y `clasificada`.
+
+**`donations.updateRule` se amplía** de `admin-o-dueño` a `admin, coordinación o dueño` (mismo patrón `adminCoordOrOwner` que ya se usó hoy mismo para `donation_items`) — cerrar la clasificación de una remesa no puede depender de ser la misma persona que la recibió, porque la fase 2 ("personal interno" clasificando) suele ser alguien distinto de quien la recibió en el mostrador.
+
+**Migración de datos, en la misma migración `049`:** todas las donaciones que ya existían (todas de antes de este cambio, sin ningún artículo `pending`) se marcan `status: "clasificada"` de una vez — no tiene sentido hacerlas pasar por el flujo nuevo retroactivamente.
+
+**Sin ningún hook nuevo.** El estado de cabecera es siempre una acción explícita (crear la remesa, agregar un artículo, cerrar/reabrir clasificación) gobernada por las reglas de acceso normales — nunca inferido por un proceso en segundo plano, a propósito, para no repetir el riesgo de que un campo derivado se desincronice de la realidad. `donations`/`donation_items` ya estaban auditados (`04_audit.pb.js`); los campos nuevos solo se agregaron a `AUDIT_FIELDS.donations` en `utils/config.js`.
+
+Verificado de punta a punta contra un servidor de prueba real (no `pb_data` real): una donación creada sin ítems, con peso declarado y transportista; un artículo agregado después, desde una sesión distinta, a una remesa ya existente; cierre de clasificación con el peso declarado como valor por defecto; y Coordinación cerrando una remesa que no recibió ella misma.
+
+Detalle del frontend (el interruptor "Solo recepción rápida" en `donaciones/nueva`, y "Agregar artículo"/"Cerrar clasificación"/"Reabrir" en `donaciones/[id]`, que hoy no existían) en el `CLAUDE.md` del frontend.
