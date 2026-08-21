@@ -22,7 +22,8 @@ var AUDIT_FIELDS = {
     "donor_name",
     "donor_phone",
     "donor_email",
-    "donor_rfc",
+    "donor_id_type",
+    "donor_id_number",
     "notes",
     "operator_id",
     "status",
@@ -38,6 +39,8 @@ var AUDIT_FIELDS = {
     "location_id",
     "unit_id",
     "rejection_reason",
+    "size",
+    "units_per_package",
   ],
   requests: [
     "code",

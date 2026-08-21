@@ -254,7 +254,7 @@ En desarrollo **no hay base de datos compartida** y no hace falta: cada quien co
 
 | Colección | Registros | Qué guarda |
 |---|---|---|
-| `units` | 20 | Unidades de medida: KG, L, UND… |
+| `units` | 22 | Unidades de medida: KG, L, UND… |
 | `groups` | 11 | Grupos de primer nivel del catálogo |
 | `categories` | 55 | Categorías dentro de cada grupo |
 | `products` | 123 | Catálogo maestro. Cada producto tiene un `default_unit_id` |
@@ -622,7 +622,7 @@ Lee [`CLAUDE.md`](CLAUDE.md) — resume el contexto, el estado actual y las rest
 | Pendiente | Detalle |
 |---|---|
 | **`locations` está vacía** | No hay migración semilla. Falta cargar el esquema `A-01-03` de la hoja `UBICACION` del catálogo maestro. Mientras tanto, `location_id` queda vacío y el inventario se lleva por producto. |
-| **Campos mexicanos** | `donations.donor_rfc` debería ser NIT (el RFC es mexicano), y `deliveries.receiver_id_type` tiene valores `["ine","pasaporte","credencial","otro"]` cuando en Colombia serían cédula, cédula de extranjería y tarjeta de identidad. Corregir **antes** de capturar datos reales: ahora cuesta una migración, después cuesta una migración de datos. |
+| **Campos mexicanos** | `deliveries.receiver_id_type` tiene valores `["ine","pasaporte","credencial","otro"]` cuando en Colombia serían cédula, cédula de extranjería y tarjeta de identidad. El mismo problema en `donations` (antes `donor_rfc`) se corrigió el 21 ago 2026 (migración `053`): ahora es `donor_id_type` (cédula de ciudadanía/extranjería, NIT, pasaporte, otro) + `donor_id_number`. Corregir `receiver_id_type` **antes** de capturar datos reales: ahora cuesta una migración, después cuesta una migración de datos. |
 | **No hay lotes ni vencimiento** | `products` trae `requires_batch` y `requires_expiry`, pero no existe la colección `inventory_batches`. Lotes, fechas de caducidad y regla FEFO están sin implementar. Para un acopio de alimentos es la decisión más costosa de postergar. |
 | **`generateSequenceCode` tiene una carrera** | Lee el último código y suma uno, sin bloqueo. Dos donaciones simultáneas piden el mismo número; el índice único de `donations.code` hace que la segunda falle con 400 en vez de duplicar. Tolerable con un operador a la vez; conviene reintentar o pasar a un contador atómico. |
 | **`023_seed_initial_superuser.js` está mal nombrada** | No crea un superusuario de PocketBase: crea un registro en `users`. El nombre no se cambia porque la migración ya corrió en varias máquinas. |
