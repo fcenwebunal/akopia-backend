@@ -307,10 +307,17 @@ server {
     # Rutas propias del frontend (Next.js) que también empiezan por
     # /api/ — location exacta, gana por precedencia sobre la /api/
     # general de abajo (que va al backend), sin importar el orden en
-    # el archivo. Sin esto, PocketBase responde 404 porque no tiene
-    # estas rutas (encontrado el 20 de agosto probando el login real
-    # por Google, no antes — hasta entonces nadie había completado el
-    # flujo de Firebase contra este servidor).
+    # el archivo. Sin esto, PocketBase responde su propio 404 (con esa
+    # forma característica: {"message":"The requested resource wasn't
+    # found."}) porque no tiene estas rutas — encontrado dos veces ya:
+    # el 20 de agosto con el login real por Google, y el 21 con
+    # /api/auth/email-status recién agregado.
+    #
+    # LECCIÓN: cualquier ruta NUEVA que se agregue bajo
+    # akopia-frontend/src/app/api/ necesita su propio bloque `location =`
+    # aquí, en los DOS server{} (puerto 80 y 443) — si un 404 con esa
+    # forma de PocketBase aparece en una ruta que debería resolver el
+    # frontend, es casi seguro esto.
     location = /api/auth/firebase {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -321,6 +328,15 @@ server {
     }
 
     location = /api/uploads/sign {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/auth/email-status {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host              $host;
@@ -397,6 +413,15 @@ server {
     }
 
     location = /api/uploads/sign {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/auth/email-status {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host              $host;

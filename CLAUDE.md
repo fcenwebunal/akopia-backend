@@ -388,3 +388,11 @@ Investigando el 500 de `/api/auth/firebase` (punto anterior) apareció algo más
 **El cron diario de respaldo (§7 de `DESPLIEGUE.md`) pasa de un `tar czf` en caliente sobre `pb_data` a la API nativa de PocketBase** (`POST /api/backups`, `scripts/backup-cron.sh` nuevo) — exactamente el mismo mecanismo online-safe que salvó los datos hoy, en vez de una copia de archivos sin checkpoint que corre el mismo riesgo que se sospecha causó la corrupción. El script autentica con el superusuario de servicio (mismas credenciales que ya usa el puente de Firebase, leídas del `.env.production` del frontend), crea el respaldo por API y prunea por filesystem solo los `auto_*.zip` con más de 30 días — nunca toca los respaldos manuales creados desde `/panel/respaldos`.
 
 Detalle completo del incidente, con la línea de tiempo de la recuperación, en el `CLAUDE.md` raíz.
+
+### 2026-08-21 — nginx no dejaba pasar `/api/auth/email-status`, mismo patrón que ya se había visto el 20 de agosto
+
+El frontend agregó una ruta propia nueva (`/api/auth/email-status`, para mensajes de login más claros — detalle en el `CLAUDE.md` del frontend). Al desplegarla en la UNAL, `curl` contra ella devolvía un 404 con la forma característica de PocketBase (`{"message":"The requested resource wasn't found."}`) — exactamente el mismo síntoma que el bug de `/api/auth/firebase` del 20 de agosto: `location /api/` en nginx captura cualquier ruta bajo ese prefijo y la manda al backend (puerto 8090) salvo que exista una `location =` exacta que gane antes, y esta ruta nueva no la tenía.
+
+Corregido agregando `location = /api/auth/email-status` en los dos `server{}` de `/etc/nginx/sites-available/akopia` (puerto 80 sobre la IP, y 443 sobre el dominio), mismo patrón que ya usan `/api/auth/firebase` y `/api/uploads/sign`. Se respaldó el archivo anterior (`akopia.bak-<fecha>`) antes de sobrescribirlo, `nginx -t` limpio antes de `systemctl reload`. `DESPLIEGUE.md` actualizado con el bloque nuevo y un comentario más explícito, para que la próxima ruta que se agregue no vuelva a tropezar con lo mismo.
+
+Verificado tras el reload: la ruta nueva ya responde el JSON del frontend, `/api/auth/firebase` y `/api/health` (que sí debía seguir yendo a PocketBase) sin regresión.
