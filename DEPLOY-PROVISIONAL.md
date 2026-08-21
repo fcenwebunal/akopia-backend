@@ -1,5 +1,23 @@
 # Despliegue provisional — Railway + Vercel
 
+> ## ⛔ RETIRADO — 21 de agosto de 2026
+>
+> **Este despliegue ya no existe.** El sitio definitivo es **<https://acopio.manizales.unal.edu.co>** (servidor de la UNAL, `172.23.177.12` — ver `akopia-backend/DESPLIEGUE.md`), público desde el 20 de agosto y con certificado TLS institucional.
+>
+> **Por qué se retiró:** el frontend de Vercel tenía incrustado el backend de Railway, así que era una aplicación completa con **su propia base de datos, separada de la de producción**. Dos sitios vivos escribiendo en dos bases distintas es el peor escenario posible el día que empieza el uso real: una donación registrada por el enlace equivocado no aparece en el inventario de nadie. Se verificó leyendo el JS ya compilado que servía Vercel.
+>
+> **Qué quedó de cada uno:**
+>
+> | | Estado |
+> |---|---|
+> | **Railway** (backend provisional) | Proyecto eliminado. Solo tenía datos de prueba |
+> | **Vercel** (frontend provisional) | Sigue en pie, pero **solo como redirector**: `vercel.json` manda todo a `acopio.manizales.unal.edu.co` con un 307. Los enlaces a `akopia.vercel.app` que ya circularon siguen llevando a la gente al sitio correcto en vez de a un 404 o, peor, a una copia con datos fantasma |
+>
+> Lo que sigue se conserva **solo como referencia histórica** — y como la receta a mano si algún día hace falta volver a levantar un entorno público de emergencia. No lo sigas para operar AKOPIA hoy.
+
+---
+
+
 **Por qué existe este documento:** OTIC (Carlos) no ha respondido con el acceso al servidor de la UNAL, y el aplicativo tiene que estar en producción recolectando datos. Decisión de Juan Manuel (18 ago 2026): desplegar de forma **provisional** en hosting público, y migrar a `172.23.177.12` (`DESPLIEGUE.md`) en cuanto haya VPN. Nada de lo que sigue es definitivo — es para hoy.
 
 **Por qué Railway y no Fly.io:** se intentó primero con Fly.io (queda documentado como alternativa al final, por si algún día una tarjeta sí pasa su verificación) — la tarjeta de Juan Manuel, incluida una virtual nueva, fue rechazada dos veces en la verificación de Fly. Railway no pidió tarjeta para el plan de prueba de 30 días que Juan Manuel ya tenía activo, así que es el camino que de verdad se pudo recorrer hoy.
