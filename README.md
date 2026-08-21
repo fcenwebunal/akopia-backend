@@ -488,6 +488,11 @@ Están en [`pb_hooks/05_routes.pb.js`](pb_hooks/05_routes.pb.js), cada una envue
 | `GET` | `/api/requests/{id}/availability` | Qué se puede atender, antes de aprobar | operador |
 | `GET` | `/api/inventory/summary` | Inventario agregado por producto, con totales | operador |
 | `POST` | `/api/dispatches/{id}/confirm-delivery` | Registra la entrega y saca de bodega lo entregado | operador |
+| `POST` | `/api/inventory/{id}/relocate` | Mueve saldo disponible a otra ubicación | admin, coordinación |
+| `POST` | `/api/inventory/{id}/reject` | Da de baja cantidad en cuarentena (salida definitiva) | admin, coordinación |
+| `POST` | `/api/records/{collection}/{id}/edit` | Edita campos de un registro con motivo obligatorio, fuera de los flujos de arriba (ver `EDITABLE_RECORDS` en `utils/config.js`) | admin, coordinación |
+| `GET` | `/api/records/{collection}/{id}/delete-check` | Adelanta si el borrado va a estar bloqueado, antes de pedir el motivo | admin, coordinación |
+| `POST` | `/api/records/{collection}/{id}/delete` | Elimina (o desactiva, según la colección) con motivo obligatorio, tras revisar dependencias | admin, coordinación |
 
 ### `approve` — la que más trabajo ahorra
 
@@ -516,6 +521,16 @@ Si alcanza, crea las reservas, marca los renglones como `reservado` y devuelve l
 | `no_entregado` | Se **liberan**: `liberacion`, el stock vuelve a disponible | `cancelada` |
 
 Lo reservado no sale físicamente hasta confirmar la entrega. Si la entrega falla, la mercancía nunca se movió: se libera la reserva, no se registra una devolución.
+
+### `edit`/`delete` — corregir o quitar un registro, con motivo obligatorio
+
+`donations`, `donation_items`, `requests`, `request_items`, `dispatches`, `deliveries`, `products`, `categories`, `groups`, `locations` y `kits` perdieron (o nunca tuvieron) un `deleteRule` real: el único camino para editar campos fuera de los flujos de arriba, o para eliminar un registro, es esta ruta — nunca un `PATCH`/`DELETE` crudo contra la colección.
+
+- **`EDITABLE_RECORDS`** (`utils/config.js`) es la lista blanca por colección: qué campos se pueden tocar (nunca uno que ya gobierne un flujo de negocio) y el `mode` — `"delete"` borra de verdad, `"deactivate"` pone `active: false` (productos/categorías/grupos/ubicaciones/kits: mismo principio de "nada se borra" que ya rige todo el catálogo, con motivo y rastro en vez de un interruptor silencioso).
+- **`utils/dependencies.js`** revisa, antes de borrar, qué depende del registro: una donación con artículos ya `available`/`quarantine`, una solicitud con reservas activas o un despacho asociado, un despacho ya entregado. Una entrega **nunca** se puede borrar — ya generó una salida real de inventario.
+- El mismo `checkEditable()` de `dependencies.js` bloquea también la edición de `donation_items`/`request_items` una vez que ya afectaron inventario — un `app.save()` dentro de esta ruta no dispara los hooks de §6b que normalmente lo impedirían en un `PATCH` crudo.
+- `changes` viaja como texto JSON en el cuerpo (`JSON.stringify()` del lado del cliente), no como campo objeto: un `DynamicModel({ changes: {} })` no se vincula a un objeto plano de JS en este runtime (goja lo envuelve en un valor de Go con métodos `get`/`set`/`value`, no las claves reales).
+- Todo queda en `audit_log` con el motivo en `notes` — antes de esto, ningún borrado dejaba rastro (`04_audit.pb.js` nunca tuvo un handler de borrado).
 
 ### Al escribir una ruta nueva
 

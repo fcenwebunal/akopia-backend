@@ -50,7 +50,8 @@ onRecordCreateRequest((e) => {
 "deliveries",
 "users",
 "kits",
-"kit_items");
+"kit_items",
+"adjustments");
 
 onRecordUpdateRequest((e) => {
   const { getOperatorId, createAuditLog } = require(`${__hooks}/utils/helpers.js`);

@@ -79,9 +79,20 @@ function loadRequest(app, requestId, expectedStatus) {
   return request;
 }
 
+// Carga cualquier registro por colección + id, con un 404 en español
+// en vez de dejar pasar la excepción cruda de PocketBase.
+function loadRecord(app, collectionName, id) {
+  try {
+    return app.findRecordById(collectionName, id);
+  } catch (err) {
+    throw new NotFoundError("No existe ese registro.");
+  }
+}
+
 module.exports = {
   requireOperator: requireOperator,
   requireAdmin: requireAdmin,
   requireRole: requireRole,
   loadRequest: loadRequest,
+  loadRecord: loadRecord,
 };
