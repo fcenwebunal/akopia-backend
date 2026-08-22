@@ -398,7 +398,13 @@ server {
     # silencio (solo se ve en la consola del navegador, la petición ni
     # siquiera sale a red) — encontrado probando el login real después
     # de crear una cuenta nueva.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com https://*.basemaps.cartocdn.com https://*.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://api.cloudinary.com https://*.googleapis.com https://securetoken.googleapis.com https://apis.google.com; frame-src https://accounts.google.com https://akopia.firebaseapp.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+    # form-action añadido el 22 ago 2026 (reescaneo ZAP de Carlos,
+    # alerta "CSP: Failure to Define Directive with No Fallback"): sin
+    # fallback a default-src, una directiva ausente en CSP equivale a
+    # permitir cualquier destino para el envío de formularios. La app
+    # no envía ningún <form> a otro origen (todo pasa por fetch/XHR,
+    # cubierto por connect-src) — el fallback correcto es 'self'.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com https://*.basemaps.cartocdn.com https://*.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://api.cloudinary.com https://*.googleapis.com https://securetoken.googleapis.com https://apis.google.com; frame-src https://accounts.google.com https://akopia.firebaseapp.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
