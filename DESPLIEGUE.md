@@ -392,19 +392,16 @@ server {
     server_tokens off;   # no divulgar la versión de nginx
 
     # Cabeceras que pidió el escaneo de Carlos (OTIC), 19 ago 2026.
-    # script-src/connect-src ganaron apis.google.com y www.gstatic.com
-    # el 20 de agosto: sin ellos, "Continuar con Google" cargaba
-    # apis.google.com/js/api.js y el propio CSP lo bloqueaba en
-    # silencio (solo se ve en la consola del navegador, la petición ni
-    # siquiera sale a red) — encontrado probando el login real después
-    # de crear una cuenta nueva.
-    # form-action añadido el 22 ago 2026 (reescaneo ZAP de Carlos,
-    # alerta "CSP: Failure to Define Directive with No Fallback"): sin
-    # fallback a default-src, una directiva ausente en CSP equivale a
-    # permitir cualquier destino para el envío de formularios. La app
-    # no envía ningún <form> a otro origen (todo pasa por fetch/XHR,
-    # cubierto por connect-src) — el fallback correcto es 'self'.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com https://*.basemaps.cartocdn.com https://*.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://api.cloudinary.com https://*.googleapis.com https://securetoken.googleapis.com https://apis.google.com; frame-src https://accounts.google.com https://akopia.firebaseapp.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
+    #
+    # Content-Security-Policy YA NO se agrega aquí desde el 22 de
+    # agosto de 2026: la genera akopia-frontend/src/proxy.ts, con un
+    # nonce distinto en cada petición para script-src (cierra la alerta
+    # ZAP "script-src unsafe-inline"). Si esta línea vuelve a
+    # descomentarse, el navegador aplicará las DOS cabeceras CSP a la
+    # vez (nginx + Next.js) y el nonce de una nunca va a coincidir con
+    # el de la otra — bloqueando todo script inline del sitio, incluido
+    # el que sí trae el nonce correcto. No reintroducir sin quitar
+    # primero la de proxy.ts.
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
