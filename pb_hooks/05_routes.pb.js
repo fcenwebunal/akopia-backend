@@ -533,9 +533,17 @@ routerAdd("POST", "/api/inventory/{id}/relocate", (e) => {
   const inventoryId = e.request.pathValue("id");
   const operator = requireRole(e, ["admin", "coordinacion"]);
 
+  // `quantity` arranca en `0.1`, no en `0` -- DynamicModel infiere el
+  // tipo Go del campo a partir del valor inicial, y un `0` entero deja
+  // el campo como int: cualquier cantidad con fracción (case normal:
+  // casi todo el inventario, ver 03_inventory.pb.js) hace que
+  // `e.bindBody` falle al decodificar el JSON, con un error genérico
+  // que no explica nada ("Something went wrong..."). Reproducido y
+  // verificado el arreglo contra una instancia desechable antes de
+  // subir esto.
   const body = new DynamicModel({
     location_id: "",
-    quantity: 0,
+    quantity: 0.1,
     notes: "",
   });
   e.bindBody(body);
@@ -579,8 +587,10 @@ routerAdd("POST", "/api/inventory/{id}/reject", (e) => {
   const inventoryId = e.request.pathValue("id");
   const operator = requireRole(e, ["admin", "coordinacion"]);
 
+  // Mismo arreglo que en /relocate justo arriba: `0.1`, no `0`, para
+  // que DynamicModel infiera un campo Go float y no int.
   const body = new DynamicModel({
-    quantity: 0,
+    quantity: 0.1,
     notes: "",
   });
   e.bindBody(body);

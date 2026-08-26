@@ -174,6 +174,20 @@ var BUCKET_LABELS = {
   quarantine: "en cuarentena",
 };
 
+// A cuántos decimales se redondea cada saldo tras cada movimiento —
+// mismo criterio que ya usa `quantity` en `donation_items` en todos los
+// scripts de importación (round3). Sin este redondeo, sumar y restar
+// cantidades con fracción cientos de veces (el caso normal, no la
+// excepción) acumula ruido de punto flotante que nunca desaparece solo
+// -- un saldo que "de verdad" es 971 termina guardado como 971.01, o
+// peor, como algo con más de diez decimales visibles. Encontrado por
+// Juan Manuel el 25 de agosto viendo cantidades como esa en producción.
+var BALANCE_DECIMALS = 1000;
+
+function round3(n) {
+  return Math.round(n * BALANCE_DECIMALS) / BALANCE_DECIMALS;
+}
+
 function updateInventoryQuantities(app, inventoryRecord, movementType, quantity) {
   var effect = MOVEMENT_EFFECTS[movementType];
   if (!effect) {
@@ -189,24 +203,32 @@ function updateInventoryQuantities(app, inventoryRecord, movementType, quantity)
   };
 
   for (var bucket in effect) {
-    buckets[bucket] += effect[bucket] * quantity;
+    var before = buckets[bucket];
+    buckets[bucket] = round3(buckets[bucket] + effect[bucket] * quantity);
 
     // Un saldo que se iría a negativo significa que la operación no debía
     // ocurrir. Recortarlo a cero dejaría el movimiento escrito con una
     // cantidad que el saldo ya no refleja, y el libro dejaría de explicar
     // el inventario — que es la única garantía que sostiene el modelo.
-    if (buckets[bucket] < 0) {
+    //
+    // El redondeo de arriba ya evita el falso negativo más común (un
+    // saldo que debía quedar en 0 exacto cae en algo como -1e-13 por
+    // puro ruido de punto flotante) -- pero se compara igual contra un
+    // umbral minúsculo, no cero literal, por si algún movimiento futuro
+    // no pasara por `round3` antes de llegar aquí.
+    if (buckets[bucket] < -1e-9) {
       throw new BadRequestError(
         "Cantidad " +
           BUCKET_LABELS[bucket] +
           " insuficiente para registrar el movimiento '" +
           movementType +
           "'. Disponible: " +
-          (buckets[bucket] - effect[bucket] * quantity) +
+          before +
           ", solicitado: " +
           quantity
       );
     }
+    if (buckets[bucket] < 0) buckets[bucket] = 0;
   }
 
   inventoryRecord.set("available_qty", buckets.available);
@@ -214,7 +236,7 @@ function updateInventoryQuantities(app, inventoryRecord, movementType, quantity)
   inventoryRecord.set("quarantine_qty", buckets.quarantine);
   inventoryRecord.set(
     "total_qty",
-    buckets.available + buckets.reserved + buckets.quarantine
+    round3(buckets.available + buckets.reserved + buckets.quarantine)
   );
   inventoryRecord.set("last_movement_at", new Date().toISOString());
 
